@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -39,6 +39,8 @@ const schema = z.object({
   description:  z.string().optional(),
   latitude:     z.string().optional(),
   longitude:    z.string().optional(),
+  cliqAlias:    z.string().optional(),
+  depositPercentage: z.number().optional(),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -90,34 +92,40 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
               description:  venue.description ?? "",
               latitude:     venue.latitude?.toString()  ?? "",
               longitude:    venue.longitude?.toString() ?? "",
+              cliqAlias:    venue.cliqAlias ?? "",
+              depositPercentage: venue.depositPercentage ?? 20,
             }
           : {
               name: "", ownerId: isOwner && userId ? userId : "", city: "", address: "",
               sports: [], pricePerHour: 0, description: "",
-              latitude: "", longitude: "",
+              latitude: "", longitude: "", cliqAlias: "", depositPercentage: 20,
             }
       )
     }
   }, [open, venue, reset, isOwner, userId])
 
+  const [isUploading, setIsUploading] = useState(false)
+
   async function handleFiles(files: FileList | File[]) {
     const remaining = MAX_IMAGES - images.length
     if (remaining <= 0) {
-      toast.error(`Maximum ${MAX_IMAGES} images allowed`)
+      toast.error(t("max_images_error"))
       return
     }
     const selected = Array.from(files).slice(0, remaining)
-    const readers = selected.map(
-      (file) =>
-        new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = (e) => resolve(e.target?.result as string)
-          reader.onerror = reject
-          reader.readAsDataURL(file)
-        })
-    )
-    const dataUrls = await Promise.all(readers)
-    setImages((prev) => [...prev, ...dataUrls])
+    setIsUploading(true)
+    try {
+      const { uploadFile } = await import("@/api/uploads")
+      const urls = await Promise.all(
+        selected.map((file) => uploadFile(file, "venue"))
+      )
+      setImages((prev) => [...prev, ...urls])
+    } catch (err) {
+      console.error("Upload failed:", err)
+      toast.error(t("upload_image_failed"))
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   function removeImage(index: number) {
@@ -154,6 +162,8 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
         images,
         latitude:  values.latitude  ? parseFloat(values.latitude)  : undefined,
         longitude: values.longitude ? parseFloat(values.longitude) : undefined,
+        cliqAlias: values.cliqAlias || undefined,
+        depositPercentage: values.depositPercentage,
       }
       return isEdit ? updateVenue(venue!.id, payload) : createVenue(payload)
     },
@@ -289,6 +299,26 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
               {...register("pricePerHour", { valueAsNumber: true })}
             />
             {errors.pricePerHour && <p className="text-xs text-destructive">{errors.pricePerHour.message}</p>}
+          </div>
+
+          {/* CliQ Alias + Deposit */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="cliqAlias">{t("cliq_alias")}</Label>
+              <Input id="cliqAlias" placeholder={t("cliq_alias_hint")} {...register("cliqAlias")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="depositPercentage">{t("deposit_percentage")}</Label>
+              <Input
+                id="depositPercentage"
+                type="number"
+                min={0}
+                max={100}
+                step={5}
+                placeholder="20"
+                {...register("depositPercentage", { valueAsNumber: true })}
+              />
+            </div>
           </div>
 
           {/* Description */}

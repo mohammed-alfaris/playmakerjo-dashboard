@@ -65,17 +65,24 @@ export default function ProfilePage() {
     onError: () => toast.error(t("avatar_update_failed")),
   })
 
-  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      setAvatarPreview(dataUrl)
-      avatarMutation.mutate(dataUrl)
-    }
-    reader.readAsDataURL(file)
     e.target.value = ""
+    try {
+      // Show preview immediately
+      const previewUrl = URL.createObjectURL(file)
+      setAvatarPreview(previewUrl)
+      // Upload file to server
+      const { uploadFile } = await import("@/api/uploads")
+      const url = await uploadFile(file, "avatar")
+      setAvatarPreview(url)
+      avatarMutation.mutate(url)
+    } catch (err) {
+      console.error("Avatar upload failed:", err)
+      toast.error(t("avatar_update_failed"))
+      setAvatarPreview(null)
+    }
   }
 
   function onProfileSubmit(values: ProfileValues) {

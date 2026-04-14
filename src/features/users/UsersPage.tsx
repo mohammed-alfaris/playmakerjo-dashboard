@@ -107,16 +107,18 @@ export default function UsersPage() {
     avatarInputRef.current?.click()
   }
 
-  function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !avatarTargetRef.current) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string
-      avatarMutation.mutate({ id: avatarTargetRef.current!, avatar: dataUrl })
-    }
-    reader.readAsDataURL(file)
     e.target.value = ""
+    try {
+      const { uploadFile } = await import("@/api/uploads")
+      const url = await uploadFile(file, "avatar")
+      avatarMutation.mutate({ id: avatarTargetRef.current!, avatar: url })
+    } catch (err) {
+      console.error("Avatar upload failed:", err)
+      toast.error(t("avatar_update_failed"))
+    }
   }
 
   const columns: ColumnDef<User>[] = [

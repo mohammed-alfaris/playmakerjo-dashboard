@@ -21,6 +21,8 @@ const STATUS_STYLES: Record<string, string> = {
   inactive:  "bg-red-100 text-red-700 border-red-200 hover:bg-red-100",
   // purple
   refunded:  "bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-100",
+  // orange
+  no_show:   "bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-100",
   // blue
   completed: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100",
 }
@@ -37,6 +39,10 @@ const STATUS_KEYS: Record<string, TranslationKey> = {
   failed:    "status_failed",
   refunded:  "status_refunded",
   pending_review: "pending_review",
+  pending_payment: "status_pending_payment",
+  approved: "proof_approved",
+  rejected: "proof_rejected",
+  no_show: "status_no_show",
 }
 
 interface StatusBadgeProps {

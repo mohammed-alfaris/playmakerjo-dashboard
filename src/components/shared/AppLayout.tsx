@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   CreditCard,
   BarChart3,
+  Bell,
   LogOut,
   Menu,
   X,
@@ -59,7 +60,8 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
     items: [
       { href: "/users",    labelKey: "nav_users",    icon: Users,    roles: ["super_admin"] },
       { href: "/payments", labelKey: "nav_payments", icon: CreditCard, roles: ["super_admin"] },
-      { href: "/reports",  labelKey: "nav_reports",  icon: BarChart3,  roles: ["super_admin", "venue_owner"] },
+      { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,  roles: ["super_admin", "venue_owner"] },
+      { href: "/notifications", labelKey: "nav_notifications", icon: Bell,       roles: ["super_admin"] },
     ],
   },
 ]

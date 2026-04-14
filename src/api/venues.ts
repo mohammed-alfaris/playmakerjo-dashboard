@@ -13,6 +13,11 @@ export interface Venue {
   images?: string[]
   latitude?: number
   longitude?: number
+  cliqAlias?: string
+  operatingHours?: unknown
+  minBookingDuration?: number
+  maxBookingDuration?: number
+  depositPercentage?: number
   createdAt: string
 }
 

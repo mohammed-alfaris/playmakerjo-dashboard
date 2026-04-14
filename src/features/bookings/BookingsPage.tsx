@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { CalendarCheck, X, Eye, Repeat, Ban } from "lucide-react"
+import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX } from "lucide-react"
 import { toast } from "sonner"
 import { ProofReviewDialog } from "./ProofReviewDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -12,10 +12,10 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { getBookings, cancelSeries, type Booking } from "@/api/bookings"
+import { getBookings, cancelSeries, completeBooking, markNoShow, type Booking } from "@/api/bookings"
 import { getVenues } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
-import { useOwnerFilter } from "@/hooks/useRole"
+import { useOwnerFilter, useRole } from "@/hooks/useRole"
 import { BOOKING_STATUSES } from "@/lib/constants"
 import { formatCurrency, formatDateTime } from "@/lib/formatters"
 import { useT } from "@/i18n/LanguageContext"
@@ -36,7 +36,10 @@ export default function BookingsPage() {
   const [venue_id, setVenueId]  = useState("all")
   const [reviewBookingId, setReviewBookingId] = useState<string | null>(null)
   const [cancelGroupId, setCancelGroupId] = useState<string | null>(null)
+  const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
+  const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
+  const { isAdmin, isOwner } = useRole()
 
   const cancelSeriesMutation = useMutation({
     mutationFn: (groupId: string) => cancelSeries(groupId),
@@ -46,6 +49,26 @@ export default function BookingsPage() {
       setCancelGroupId(null)
     },
     onError: () => toast.error(t("series_cancel_failed")),
+  })
+
+  const completeMutation = useMutation({
+    mutationFn: (id: string) => completeBooking(id),
+    onSuccess: () => {
+      toast.success(t("booking_completed"))
+      queryClient.invalidateQueries({ queryKey: ["bookings"] })
+      setCompleteBookingId(null)
+    },
+    onError: () => toast.error(t("booking_complete_failed")),
+  })
+
+  const noShowMutation = useMutation({
+    mutationFn: (id: string) => markNoShow(id),
+    onSuccess: () => {
+      toast.success(t("booking_no_show_marked"))
+      queryClient.invalidateQueries({ queryKey: ["bookings"] })
+      setNoShowBookingId(null)
+    },
+    onError: () => toast.error(t("booking_no_show_failed")),
   })
 
   const handleFilterChange = useCallback(
@@ -176,6 +199,28 @@ export default function BookingsPage() {
                 {t("cancel_series")}
               </Button>
             )}
+            {b.status === "confirmed" && (isAdmin || isOwner) && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                  onClick={() => setCompleteBookingId(b.id)}
+                >
+                  <CheckCircle className="h-3 w-3 me-1" />
+                  {t("mark_completed")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                  onClick={() => setNoShowBookingId(b.id)}
+                >
+                  <UserX className="h-3 w-3 me-1" />
+                  {t("mark_no_show")}
+                </Button>
+              </>
+            )}
           </div>
         )
       },
@@ -277,6 +322,24 @@ export default function BookingsPage() {
         onOpenChange={(open) => { if (!open) setCancelGroupId(null) }}
         onConfirm={() => cancelGroupId && cancelSeriesMutation.mutate(cancelGroupId)}
         isLoading={cancelSeriesMutation.isPending}
+      />
+
+      <ConfirmDialog
+        title={t("mark_completed")}
+        description={t("mark_completed_confirm")}
+        open={!!completeBookingId}
+        onOpenChange={(open) => { if (!open) setCompleteBookingId(null) }}
+        onConfirm={() => completeBookingId && completeMutation.mutate(completeBookingId)}
+        isLoading={completeMutation.isPending}
+      />
+
+      <ConfirmDialog
+        title={t("mark_no_show")}
+        description={t("mark_no_show_confirm")}
+        open={!!noShowBookingId}
+        onOpenChange={(open) => { if (!open) setNoShowBookingId(null) }}
+        onConfirm={() => noShowBookingId && noShowMutation.mutate(noShowBookingId)}
+        isLoading={noShowMutation.isPending}
       />
     </div>
   )

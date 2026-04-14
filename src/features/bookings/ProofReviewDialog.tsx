@@ -120,6 +120,7 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
                     src={booking.paymentProof}
                     alt="Payment proof"
                     className="w-full max-h-[400px] object-contain mx-auto"
+                    onError={(e) => { (e.target as HTMLImageElement).outerHTML = '<div class="p-8 text-center text-sm text-muted-foreground">Could not load proof image</div>' }}
                   />
                 </a>
               ) : (

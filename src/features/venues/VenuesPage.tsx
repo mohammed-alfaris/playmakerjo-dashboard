@@ -99,6 +99,7 @@ export default function VenuesPage() {
                 src={img}
                 alt={row.original.name}
                 className="h-9 w-14 rounded-md object-cover shrink-0 bg-muted"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement?.insertAdjacentHTML('afterbegin', '<div class="h-9 w-14 rounded-md bg-muted shrink-0"></div>') }}
               />
             ) : (
               <div className="h-9 w-14 rounded-md bg-muted shrink-0" />

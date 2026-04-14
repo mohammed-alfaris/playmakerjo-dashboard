@@ -98,6 +98,7 @@ export default function VenueDetailPage() {
             src={images[activeImage]}
             alt={venue?.name}
             className="w-full h-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
           />
           {images.length > 1 && (
             <>

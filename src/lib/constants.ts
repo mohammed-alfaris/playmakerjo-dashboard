@@ -37,6 +37,7 @@ export const BOOKING_STATUSES = [
   { value: "confirmed", label: "Confirmed", labelAr: "مؤكد" },
   { value: "cancelled", label: "Cancelled", labelAr: "ملغى" },
   { value: "completed", label: "Completed", labelAr: "مكتمل" },
+  { value: "no_show",   label: "No Show",   labelAr: "لم يحضر" },
 ] as const
 
 export const PAYMENT_STATUSES = [

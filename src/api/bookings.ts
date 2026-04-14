@@ -21,7 +21,7 @@ export interface Booking {
   paymentProofStatus?: "pending_review" | "approved" | "rejected" | null
   paymentProofNote?: string | null
   recurringGroupId?: string | null
-  status: "pending" | "pending_payment" | "pending_review" | "confirmed" | "cancelled" | "completed"
+  status: "pending" | "pending_payment" | "pending_review" | "confirmed" | "cancelled" | "completed" | "no_show"
 }
 
 export interface BookingsParams {
@@ -52,5 +52,15 @@ export async function cancelSeries(groupId: string) {
 
 export async function reviewProof(id: string, payload: { approved: boolean; note?: string }) {
   const res = await api.patch(`/bookings/${id}/review-proof`, payload)
+  return res.data.data as Booking
+}
+
+export async function completeBooking(id: string) {
+  const res = await api.patch(`/bookings/${id}/complete`)
+  return res.data.data as Booking
+}
+
+export async function markNoShow(id: string) {
+  const res = await api.patch(`/bookings/${id}/no-show`)
   return res.data.data as Booking
 }
