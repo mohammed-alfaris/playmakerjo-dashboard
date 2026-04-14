@@ -2,6 +2,10 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
+ARG VITE_API_URL=https://api.yallanhjez.com/api/v1
+ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_MOCK_API=false
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

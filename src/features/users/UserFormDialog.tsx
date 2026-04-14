@@ -22,7 +22,7 @@ import { useT } from "@/i18n/LanguageContext"
 const schema = z.object({
   name:        z.string().min(2, "Name is required"),
   email:       z.string().email("Invalid email"),
-  password:    z.string().min(6, "Password must be at least 6 characters"),
+  password:    z.string().min(8, "Password must be at least 8 characters"),
   phone:       z.string().optional(),
   role:        z.string().min(1, "Role is required"),
   permissions: z.enum(["read", "write"]).optional(),

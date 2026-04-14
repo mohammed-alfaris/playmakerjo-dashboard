@@ -25,7 +25,7 @@ type ProfileValues = z.infer<typeof profileSchema>
 // ─── Password schema ──────────────────────────────────────────────────────────
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, "Required"),
-  newPassword:     z.string().min(6, "password_min"),
+  newPassword:     z.string().min(8, "password_min"),
   confirmPassword: z.string().min(1, "Required"),
 }).refine((d) => d.newPassword === d.confirmPassword, {
   message: "passwords_no_match",
