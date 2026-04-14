@@ -11,6 +11,7 @@ node_modules
 dist
 dist-ssr
 *.local
+.vs/
 
 # Environment (keep .env.example and .env.production committed)
 .env
