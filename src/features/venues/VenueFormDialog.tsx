@@ -189,9 +189,12 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
     mutation.mutate(values)
   }
 
-  function toggleSport(sport: string, current: string[], onChange: (v: string[]) => void) {
-    onChange(current.includes(sport) ? current.filter((s) => s !== sport) : [...current, sport])
-  }
+  const toggleSport = useCallback(
+    (sport: string, current: string[], onChange: (v: string[]) => void) => {
+      onChange(current.includes(sport) ? current.filter((s) => s !== sport) : [...current, sport])
+    },
+    []
+  )
 
   const slotsLeft = MAX_IMAGES - images.length
 
