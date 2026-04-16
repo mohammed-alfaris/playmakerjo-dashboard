@@ -125,6 +125,7 @@ export const translations = {
     deposit_percentage: "Deposit %",
     max_images_error: "Maximum images allowed",
     upload_image_failed: "Failed to upload image(s). Please try again.",
+    image_too_large: "Image must be smaller than 5 MB",
     // Venue Detail
     view_on_map: "View on Map",
     edit: "Edit",
@@ -407,6 +408,7 @@ export const translations = {
     deposit_percentage: "نسبة العربون",
     max_images_error: "الحد الأقصى للصور المسموح بها",
     upload_image_failed: "فشل رفع الصورة. يرجى المحاولة مرة أخرى.",
+    image_too_large: "يجب أن يكون حجم الصورة أقل من 5 ميجابايت",
     // Venue Detail
     view_on_map: "عرض على الخريطة",
     edit: "تعديل",

@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/LanguageContext"
 
 const MAX_IMAGES = 5
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 const schema = z.object({
   name:         z.string().min(2, "Name must be at least 2 characters"),
@@ -112,7 +113,15 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
       toast.error(t("max_images_error"))
       return
     }
-    const selected = Array.from(files).slice(0, remaining)
+    const selected: File[] = []
+    for (const file of Array.from(files).slice(0, remaining)) {
+      if (file.size > MAX_IMAGE_BYTES) {
+        toast.error(t("image_too_large"))
+        continue
+      }
+      selected.push(file)
+    }
+    if (selected.length === 0) return
     setIsUploading(true)
     try {
       const { uploadFile } = await import("@/api/uploads")
