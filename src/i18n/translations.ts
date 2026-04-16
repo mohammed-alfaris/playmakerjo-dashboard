@@ -279,6 +279,9 @@ export const translations = {
     notification_image_hint: "Optional image URL for push notification",
     send_to_selected: "Send to Selected",
     no_users_selected: "No users selected",
+    error_boundary_title: "Something went wrong",
+    error_boundary_body: "An unexpected error occurred. Please reload the page.",
+    error_boundary_reload: "Reload page",
   },
   ar: {
     // Nav
@@ -558,6 +561,9 @@ export const translations = {
     notification_image_hint: "رابط صورة اختياري للإشعار",
     send_to_selected: "إرسال للمحددين",
     no_users_selected: "لم يتم تحديد مستخدمين",
+    error_boundary_title: "حدث خطأ غير متوقع",
+    error_boundary_body: "وقع خطأ غير متوقع. الرجاء إعادة تحميل الصفحة.",
+    error_boundary_reload: "إعادة تحميل الصفحة",
   },
 } as const
 
