@@ -1,4 +1,5 @@
 import api from "./axios"
+import type { OperatingHours } from "@/lib/types"
 
 export interface Venue {
   id: string
@@ -14,7 +15,7 @@ export interface Venue {
   latitude?: number
   longitude?: number
   cliqAlias?: string
-  operatingHours?: unknown
+  operatingHours?: OperatingHours
   minBookingDuration?: number
   maxBookingDuration?: number
   depositPercentage?: number
