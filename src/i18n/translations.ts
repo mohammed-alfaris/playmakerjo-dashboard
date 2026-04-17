@@ -21,6 +21,7 @@ export const translations = {
     export_report: "Export Report",
     amman: "Amman",
     loading: "Loading…",
+    pages: "Pages",
     // Auth
     sign_in: "Sign in",
     email: "Email",
@@ -323,6 +324,7 @@ export const translations = {
     export_report: "تصدير التقرير",
     amman: "عمّان",
     loading: "جارٍ التحميل…",
+    pages: "الصفحات",
     // Auth
     sign_in: "تسجيل الدخول",
     email: "البريد الإلكتروني",

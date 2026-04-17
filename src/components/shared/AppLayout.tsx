@@ -8,6 +8,7 @@ import { Sidebar } from "./Sidebar"
 import { TopHeader } from "./TopHeader"
 import { QuickActionFab } from "./QuickActionFab"
 import { AnnouncementsBanner } from "./AnnouncementsBanner"
+import { CommandPalette } from "./CommandPalette"
 
 export default function AppLayout() {
   const { collapsed, toggle } = useSidebar()
@@ -67,6 +68,7 @@ export default function AppLayout() {
       </Sheet>
 
       <QuickActionFab />
+      <CommandPalette />
       <Toaster richColors position="top-right" />
     </div>
   )

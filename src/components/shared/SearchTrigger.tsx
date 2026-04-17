@@ -1,20 +1,19 @@
 import { Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/LanguageContext"
+import { useCommandPaletteStore } from "@/store/commandPaletteStore"
 
 /**
- * Visual trigger for the ⌘K command palette. Palette itself lands in Phase 12.
+ * Visual trigger for the ⌘K command palette. Palette opens on click or Cmd/Ctrl+K.
  */
 export function SearchTrigger({ className }: { className?: string }) {
   const { t } = useT()
+  const open = useCommandPaletteStore((s) => s.setOpen)
 
   return (
     <button
       type="button"
-      onClick={() => {
-        // eslint-disable-next-line no-console
-        console.info("[SearchTrigger] command palette arrives in Phase 12")
-      }}
+      onClick={() => open(true)}
       className={cn(
         "group hidden md:inline-flex h-9 min-w-[16rem] items-center gap-2 rounded-lg bg-muted/60 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted",
         className
