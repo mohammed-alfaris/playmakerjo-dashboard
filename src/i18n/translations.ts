@@ -12,9 +12,15 @@ export const translations = {
     nav_management: "Management",
     // Header
     owner_badge: "Owner",
+    role_super_admin: "Super Admin",
     logout: "Logout",
     switch_to_light: "Switch to light mode",
     switch_to_dark: "Switch to dark mode",
+    search_placeholder: "Search venues, bookings, users…",
+    broadcast_announcement: "Broadcast Announcement",
+    export_report: "Export Report",
+    amman: "Amman",
+    loading: "Loading…",
     // Auth
     sign_in: "Sign in",
     email: "Email",
@@ -308,9 +314,15 @@ export const translations = {
     nav_management: "الإدارة",
     // Header
     owner_badge: "مالك",
+    role_super_admin: "مدير عام",
     logout: "تسجيل الخروج",
     switch_to_light: "التبديل إلى الوضع الفاتح",
     switch_to_dark: "التبديل إلى الوضع الداكن",
+    search_placeholder: "ابحث عن الملاعب والحجوزات والمستخدمين…",
+    broadcast_announcement: "إرسال إعلان",
+    export_report: "تصدير التقرير",
+    amman: "عمّان",
+    loading: "جارٍ التحميل…",
     // Auth
     sign_in: "تسجيل الدخول",
     email: "البريد الإلكتروني",
