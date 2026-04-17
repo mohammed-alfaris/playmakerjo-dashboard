@@ -21,7 +21,7 @@ export const translations = {
     password: "Password",
     enter_credentials: "Enter your credentials to continue",
     admin_dashboard: "Admin Dashboard",
-    sports_venue: "Sports Venue",
+    sports_venue: "PlayMaker JO",
     access_denied: "Access denied. This portal is for admins and venue owners only.",
     login_failed: "Login failed. Please try again.",
     // Dashboard
@@ -317,7 +317,7 @@ export const translations = {
     password: "كلمة المرور",
     enter_credentials: "أدخل بيانات الاعتماد للمتابعة",
     admin_dashboard: "لوحة تحكم المشرف",
-    sports_venue: "ملاعب رياضية",
+    sports_venue: "صانع اللعب",
     access_denied: "وصول مرفوض. هذه البوابة للمشرفين وأصحاب الملاعب فقط.",
     login_failed: "فشل تسجيل الدخول. يرجى المحاولة مرة أخرى.",
     // Dashboard

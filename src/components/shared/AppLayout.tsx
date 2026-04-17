@@ -126,9 +126,9 @@ function SidebarContent({
       {/* Logo */}
       <div className={cn("flex h-14 items-center border-b px-4 shrink-0", collapsed && "justify-center px-2")}>
         {collapsed ? (
-          <span className="text-lg font-bold font-display">SV</span>
+          <span className="text-lg font-bold font-display">PM</span>
         ) : (
-          <span className="text-lg font-bold tracking-tight font-display">Sports Venue</span>
+          <span className="text-lg font-bold tracking-tight font-display">PlayMaker JO</span>
         )}
       </div>
 

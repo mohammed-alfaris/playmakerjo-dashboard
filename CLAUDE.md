@@ -1,7 +1,7 @@
-# YallaNhjez — Admin Dashboard
+# PlayMaker JO — Admin Dashboard
 
 ## Project overview
-React admin dashboard for the YallaNhjez sports venue booking platform.
+React admin dashboard for the PlayMaker JO sports venue booking platform.
 Used by **super_admin** (full access) and **venue_owner** (scoped to own venues).
 Connects to the ASP.NET Core 9 backend API.
 Bilingual: English + Arabic (RTL).
@@ -41,7 +41,7 @@ npm run lint        # ESLint
 
 ## Project structure
 ```
-yalla-nhjez-dashboard/
+sports-venue-dashboard/
 ├── src/
 │   ├── api/                    # Axios-based API layer
 │   │   ├── axios.ts            # Axios instance + auth interceptor
