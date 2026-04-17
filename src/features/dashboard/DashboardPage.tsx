@@ -2,13 +2,14 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { DollarSign, CalendarCheck, MapPin, TrendingUp, Plus, UserPlus, Download, Percent } from "lucide-react"
-import { PageHeader } from "@/components/shared/PageHeader"
 import { StatCard } from "@/components/shared/StatCard"
 import { Button } from "@/components/ui/button"
 import { RevenueChart } from "./RevenueChart"
 import { TopVenuesChart } from "./TopVenuesChart"
 import { SportsPieChart } from "./SportsPieChart"
 import { RecentBookingsTable } from "./RecentBookingsTable"
+import { GreetingStrip } from "./GreetingStrip"
+import { RevenueTargetGauge } from "./RevenueTargetGauge"
 import { getSummary } from "@/api/reports"
 import { useRole, useOwnerFilter } from "@/hooks/useRole"
 import { formatCurrency } from "@/lib/formatters"
@@ -16,9 +17,10 @@ import { useT } from "@/i18n/LanguageContext"
 import { cn } from "@/lib/utils"
 
 const DATE_RANGES = [
-  { label: "7D",  value: 7  },
-  { label: "30D", value: 30 },
-  { label: "90D", value: 90 },
+  { label: "7D",  value: 7   },
+  { label: "30D", value: 30  },
+  { label: "90D", value: 90  },
+  { label: "YTD", value: 365 },
 ]
 
 export default function DashboardPage() {
@@ -37,10 +39,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title={t("dashboard")}
-        subtitle={isOwner ? t("your_overview") : t("platform_overview")}
-      />
+      <GreetingStrip />
 
       {/* Quick Actions — admin only */}
       {isAdmin && (
@@ -137,8 +136,8 @@ export default function DashboardPage() {
                 className={cn(
                   "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
                   days === r.value
-                    ? "bg-brand text-white border-brand"
-                    : "border-border text-muted-foreground hover:border-brand hover:text-brand"
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:border-primary hover:text-primary"
                 )}
               >
                 {r.label}
@@ -146,7 +145,14 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          <RevenueChart days={days} />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="lg:col-span-8">
+              <RevenueChart days={days} />
+            </div>
+            <div className="lg:col-span-4">
+              <RevenueTargetGauge />
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
             <div className="lg:col-span-3">
