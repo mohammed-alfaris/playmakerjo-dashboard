@@ -11,6 +11,24 @@ const config: Config = {
       fontFamily: {
         display: ["Outfit", "sans-serif"],
         body:    ["Inter", "sans-serif"],
+        arabic:  ["Cairo", "sans-serif"],
+      },
+      fontSize: {
+        "display-lg": ["clamp(2.5rem, 4vw, 3.25rem)", { lineHeight: "1.05", letterSpacing: "-0.02em", fontWeight: "600" }],
+        "display-md": ["clamp(2rem, 3vw, 2.5rem)",    { lineHeight: "1.1",  letterSpacing: "-0.015em", fontWeight: "600" }],
+        "headline":   ["1.5rem",                      { lineHeight: "1.25", letterSpacing: "-0.01em", fontWeight: "600" }],
+        "label-md":   ["0.8125rem",                   { lineHeight: "1.4",  letterSpacing: "0.01em", fontWeight: "500" }],
+        "label-sm":   ["0.75rem",                     { lineHeight: "1.35", letterSpacing: "0.02em", fontWeight: "500" }],
+      },
+      transitionTimingFunction: {
+        kinetic: "cubic-bezier(0.22, 1, 0.36, 1)",
+      },
+      boxShadow: {
+        ambient: "0px 20px 40px rgba(19, 27, 46, 0.06)",
+        "ambient-dark": "0px 20px 40px rgba(0, 0, 0, 0.3)",
+      },
+      backgroundImage: {
+        "primary-gradient": "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-container)) 100%)",
       },
       colors: {
         border: "hsl(var(--border))",
@@ -21,6 +39,9 @@ const config: Config = {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          container: "hsl(var(--primary-container))",
+          fixed: "hsl(var(--primary-fixed))",
+          "on-fixed": "hsl(var(--on-primary-fixed))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -50,10 +71,20 @@ const config: Config = {
           DEFAULT:    "hsl(var(--brand))",
           foreground: "hsl(var(--brand-foreground))",
         },
+        /* Emerald Pitch layering — use these to separate sections WITHOUT borders */
         surface: {
-          DEFAULT: "hsl(var(--surface))",
-          raised:  "hsl(var(--surface-raised))",
+          DEFAULT:   "hsl(var(--surface))",
+          low:       "hsl(var(--surface-container-low))",
+          container: "hsl(var(--surface-container))",
+          high:      "hsl(var(--surface-container-high))",
+          lowest:    "hsl(var(--surface-container-lowest))",
+          /* Back-compat alias — old `bg-surface-raised` keeps working */
+          raised:    "hsl(var(--surface-container-lowest))",
         },
+        tertiary: "hsl(var(--tertiary))",
+        "on-surface":         "hsl(var(--on-surface))",
+        "on-surface-variant": "hsl(var(--on-surface-variant))",
+        "outline-variant":    "hsl(var(--outline-variant))",
       },
       borderRadius: {
         lg: "var(--radius)",

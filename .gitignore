@@ -1,3 +1,6 @@
+# Pre-redesign backups (on-disk snapshots; git tags are the canonical backup)
+src-backup-*/
+
 # Logs
 logs
 *.log
