@@ -1,4 +1,4 @@
-import { DEFAULT_CURRENCY, DEFAULT_LOCALE } from "./constants"
+import { DEFAULT_CURRENCY } from "./constants"
 
 export function formatCurrency(amount: number, currency = DEFAULT_CURRENCY): string {
   return new Intl.NumberFormat("en-US", {

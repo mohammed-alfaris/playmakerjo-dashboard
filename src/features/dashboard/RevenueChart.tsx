@@ -51,7 +51,7 @@ export function RevenueChart({ days = 30 }: RevenueChartProps) {
             width={72}
           />
           <Tooltip
-            formatter={(value: number, name: string) => [
+            formatter={(value, name) => [
               formatCurrency(Number(value)),
               name === "revenue" ? t("gross_revenue") : name === "systemRevenue" ? t("system_revenue") : t("owner_revenue"),
             ]}

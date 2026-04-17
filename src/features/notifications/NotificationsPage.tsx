@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   Send, Plus, Trash2, Pencil, Copy, Loader2,
-  Search, Smartphone, Bell, BellOff, ImageIcon,
+  Search, Bell, BellOff, ImageIcon,
 } from "lucide-react"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"

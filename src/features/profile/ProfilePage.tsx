@@ -81,7 +81,7 @@ export default function ProfilePage() {
     } catch (err) {
       console.error("Avatar upload failed:", err)
       toast.error(t("avatar_update_failed"))
-      setAvatarPreview(null)
+      setAvatarPreview(undefined)
     }
   }
 

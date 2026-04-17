@@ -105,7 +105,7 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
     }
   }, [open, venue, reset, isOwner, userId])
 
-  const [isUploading, setIsUploading] = useState(false)
+  const [, setIsUploading] = useState(false)
 
   async function handleFiles(files: FileList | File[]) {
     const remaining = MAX_IMAGES - images.length
