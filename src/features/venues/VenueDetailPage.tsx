@@ -69,7 +69,13 @@ export default function VenueDetailPage() {
     {
       accessorKey: "duration",
       header: t("duration"),
-      cell: ({ row }) => `${row.original.duration}h`,
+      // duration is in minutes (backend migration)
+      cell: ({ row }) => {
+        const m = row.original.duration
+        const h = Math.floor(m / 60)
+        const rem = m % 60
+        return rem === 0 ? `${h}h` : `${h}h ${rem}m`
+      },
     },
     {
       accessorKey: "amount",

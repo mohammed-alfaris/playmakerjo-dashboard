@@ -141,7 +141,13 @@ export default function BookingsPage() {
     {
       accessorKey: "duration",
       header: t("duration"),
-      cell: ({ row }) => `${row.original.duration}h`,
+      // duration is now in minutes (backend migration); format as "1h 30m"
+      cell: ({ row }) => {
+        const m = row.original.duration
+        const h = Math.floor(m / 60)
+        const rem = m % 60
+        return rem === 0 ? `${h}h` : `${h}h ${rem}m`
+      },
     },
     {
       accessorKey: "amount",
