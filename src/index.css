@@ -6,58 +6,89 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* === Shadcn base — primary swapped to emerald per emerald_pitch === */
+    --background: 253 100% 99%;        /* #faf8ff surface */
+    --foreground: 223 41% 13%;         /* #131b2e on-surface, never #000 */
+    --card: 0 0% 100%;                 /* surface-container-lowest */
+    --card-foreground: 223 41% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --popover-foreground: 223 41% 13%;
+    --primary: 148 80% 22%;            /* #0b6438 emerald */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 264 50% 96%;          /* #f2eefa surface-container-low */
+    --secondary-foreground: 223 41% 13%;
+    --muted: 263 35% 93%;              /* #ece7f5 surface-container */
+    --muted-foreground: 222 17% 34%;   /* #475064 on-surface-variant */
+    --accent: 264 50% 96%;
+    --accent-foreground: 223 41% 13%;
+    --destructive: 350 39% 40%;        /* #8c3d4a tertiary (negative trend) */
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 13% 84%;             /* #d0d4dc outline-variant */
+    --input: 218 13% 84%;
+    --ring: 148 80% 22%;               /* focus ring = primary */
     --radius: 0.5rem;
-    /* Brand + surface */
-    --brand: 142 72% 29%;
+
+    /* === Emerald Pitch extended palette === */
+    --primary-container: 141 47% 34%;  /* #2e7d4f — gradient endpoint */
+    --primary-fixed: 142 34% 86%;      /* #cfe8d8 — tinted badge bg */
+    --on-primary-fixed: 148 80% 22%;   /* badge text on primary-fixed */
+    --tertiary: 350 39% 40%;           /* #8c3d4a */
+    --on-surface: 223 41% 13%;
+    --on-surface-variant: 222 17% 34%;
+    --outline-variant: 218 13% 84%;    /* use at 15% opacity as ghost border */
+
+    /* Surface layering (The "No-Line" rule — stack these instead of borders) */
+    --surface: 253 100% 99%;
+    --surface-container-low: 264 50% 96%;
+    --surface-container: 263 35% 93%;
+    --surface-container-high: 262 27% 91%;
+    --surface-container-lowest: 0 0% 100%;
+
+    /* Brand = primary alias (back-compat for pre-existing `bg-brand` usages) */
+    --brand: 148 80% 22%;
     --brand-foreground: 0 0% 100%;
-    --surface: 210 40% 96.1%;
-    --surface-raised: 0 0% 100%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    /* Brand + surface */
-    --brand: 142 72% 29%;
+    /* === Dark mode — surfaces flip to deep slate, primary stays emerald === */
+    --background: 223 41% 10%;         /* deeper than #131b2e for body bg */
+    --foreground: 0 0% 98%;
+    --card: 223 37% 14%;               /* surface-container-lowest dark */
+    --card-foreground: 0 0% 98%;
+    --popover: 223 37% 14%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 141 47% 42%;            /* lighter emerald pops on dark bg */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 223 33% 18%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 223 33% 18%;
+    --muted-foreground: 222 14% 67%;
+    --accent: 223 33% 18%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 350 55% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 223 33% 22%;
+    --input: 223 33% 22%;
+    --ring: 141 47% 42%;
+
+    /* Emerald Pitch extended palette (dark) */
+    --primary-container: 141 58% 52%;
+    --primary-fixed: 148 30% 22%;      /* darker tint for badge bg */
+    --on-primary-fixed: 142 34% 86%;   /* light badge text */
+    --tertiary: 350 55% 60%;
+    --on-surface: 0 0% 98%;
+    --on-surface-variant: 222 14% 67%;
+    --outline-variant: 223 33% 30%;
+
+    /* Surface layering */
+    --surface: 223 41% 10%;
+    --surface-container-low: 223 37% 14%;
+    --surface-container: 223 35% 17%;
+    --surface-container-high: 223 33% 20%;
+    --surface-container-lowest: 224 37% 16%;   /* #1a2238 surface-bright for "active" states */
+
+    --brand: 141 47% 42%;
     --brand-foreground: 0 0% 100%;
-    --surface: 222 47% 11%;
-    --surface-raised: 222 47% 14%;
   }
 }
 
@@ -68,8 +99,23 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', sans-serif;
+    font-feature-settings: "cv11", "ss01";  /* Inter: better numerals */
   }
   [dir="rtl"] body {
+    font-family: 'Cairo', sans-serif;
+  }
+  /* Align Cairo's x-height with Inter per DESIGN.md §6 */
+  [dir="rtl"] body,
+  [dir="rtl"] * {
+    line-height: 1.65;
+  }
+  /* Disallow pure black text — enforce on-surface color */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  [dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3, [dir="rtl"] h4, [dir="rtl"] h5, [dir="rtl"] h6 {
     font-family: 'Cairo', sans-serif;
   }
 }
