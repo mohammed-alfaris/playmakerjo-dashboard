@@ -12,6 +12,7 @@ import { StatCard } from "@/components/shared/StatCard"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { DataTable } from "@/components/shared/DataTable"
 import { VenueFormDialog } from "./VenueFormDialog"
+import { VenueSlotTimeline } from "./VenueSlotTimeline"
 import { getVenue, getVenueStats } from "@/api/venues"
 import { getBookings, type Booking } from "@/api/bookings"
 import { usePagination } from "@/hooks/usePagination"
@@ -215,6 +216,11 @@ export default function VenueDetailPage() {
           isLoading={statsLoading}
         />
       </div>
+
+      {/* Today's slots timeline */}
+      {id && venue && (
+        <VenueSlotTimeline venueId={id} operatingHours={venue.operatingHours} />
+      )}
 
       {/* Venue Info Card */}
       {!venueLoading && (venue?.description || (venue?.latitude && venue?.longitude)) && (
