@@ -7,7 +7,9 @@ ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_MOCK_API=false
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# Using `npm install` instead of `npm ci` because the lockfile was generated
+# on Windows and omits some platform-specific esbuild binaries that Linux needs.
+RUN npm install --no-audit --no-fund
 
 COPY . .
 RUN npm run build
