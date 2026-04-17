@@ -283,6 +283,19 @@ export const translations = {
     error_boundary_title: "Something went wrong",
     error_boundary_body: "An unexpected error occurred. Please reload the page.",
     error_boundary_reload: "Reload page",
+    // Reviews moderation
+    reviews: "Reviews",
+    reviewModeration: "Review Moderation",
+    allReviews: "All",
+    visible: "Visible",
+    hidden: "Hidden",
+    hideReview: "Hide Review",
+    hideReviewConfirm: "Are you sure you want to hide this review? Players will still see the rest.",
+    reviewHidden: "Review hidden",
+    reviewComment: "Comment",
+    filterVenue: "Venue",
+    filterStatus: "Status",
+    noReviewsFound: "No reviews found",
   },
   ar: {
     // Nav
@@ -566,6 +579,19 @@ export const translations = {
     error_boundary_title: "حدث خطأ غير متوقع",
     error_boundary_body: "وقع خطأ غير متوقع. الرجاء إعادة تحميل الصفحة.",
     error_boundary_reload: "إعادة تحميل الصفحة",
+    // Reviews moderation
+    reviews: "التقييمات",
+    reviewModeration: "إدارة التقييمات",
+    allReviews: "الكل",
+    visible: "ظاهر",
+    hidden: "مخفي",
+    hideReview: "إخفاء التقييم",
+    hideReviewConfirm: "هل تريد إخفاء هذا التقييم؟ سيزال الباقي ظاهراً.",
+    reviewHidden: "تم إخفاء التقييم",
+    reviewComment: "التعليق",
+    filterVenue: "الملعب",
+    filterStatus: "الحالة",
+    noReviewsFound: "لا توجد تقييمات",
   },
 } as const
 
