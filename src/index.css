@@ -247,3 +247,66 @@
 
   [dir="rtl"] .rtl-flip { transform: scaleX(-1); }
 }
+
+/* ───────────────────────────────────────────────────────────────────
+   Leaflet — stadium theming (popups + attribution + controls)
+   ─────────────────────────────────────────────────────────────── */
+.leaflet-container {
+  background: hsl(var(--surface-2));
+  font-family: inherit;
+}
+
+/* Dark tile fallback color while tiles load */
+.dark .leaflet-container { background: #0b1018; }
+
+/* Popup card — use card surface + ink text, match rounded-2xl */
+.leaflet-popup-content-wrapper {
+  background: hsl(var(--card));
+  color: hsl(var(--ink));
+  border: 1px solid hsl(var(--line-strong));
+  border-radius: 14px;
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.45);
+  padding: 2px;
+}
+.leaflet-popup-content {
+  color: hsl(var(--ink));
+  margin: 10px 12px;
+  line-height: 1.35;
+}
+.leaflet-popup-tip {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--line-strong));
+  box-shadow: none;
+}
+.leaflet-popup-close-button,
+.leaflet-popup-close-button:hover {
+  color: hsl(var(--ink-3)) !important;
+  padding: 6px 8px !important;
+}
+.leaflet-popup-close-button:hover { color: hsl(var(--ink)) !important; }
+
+/* Attribution strip */
+.leaflet-control-attribution {
+  background: hsl(var(--card) / 0.85) !important;
+  color: hsl(var(--ink-3)) !important;
+  border-radius: 6px;
+  border: 1px solid hsl(var(--line-strong));
+  backdrop-filter: blur(4px);
+}
+.leaflet-control-attribution a { color: hsl(var(--brand)) !important; }
+
+/* Zoom controls */
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: hsl(var(--card));
+  color: hsl(var(--ink));
+  border-bottom-color: hsl(var(--line-strong));
+}
+.leaflet-bar a:hover { background: hsl(var(--surface-2)); }
+.leaflet-bar {
+  border: 1px solid hsl(var(--line-strong));
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.3);
+}
+

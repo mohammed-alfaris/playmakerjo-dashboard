@@ -15,6 +15,28 @@ import { cn } from "@/lib/utils"
 const DEFAULT_CENTER: [number, number] = [31.9539, 35.9106]
 const DEFAULT_ZOOM = 8
 
+// CartoDB tile endpoints (free, no API key). Dark for dark mode, light for light.
+const TILES_DARK  = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+const TILES_LIGHT = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+const TILES_ATTRIB =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+
+/** Tracks the `dark` class on <html> so Leaflet can swap tile themes. */
+function useIsDark() {
+  const [isDark, setIsDark] = useState<boolean>(
+    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  )
+  useEffect(() => {
+    const root = document.documentElement
+    const update = () => setIsDark(root.classList.contains("dark"))
+    update()
+    const obs = new MutationObserver(update)
+    obs.observe(root, { attributes: true, attributeFilter: ["class"] })
+    return () => obs.disconnect()
+  }, [])
+  return isDark
+}
+
 type StatusKey = "active" | "inactive" | "pending"
 
 const STATUS_COLOR: Record<StatusKey, { ring: string; dot: string; hsl: string }> = {
@@ -67,6 +89,7 @@ function MapRefBinder({ bind }: { bind: (m: L.Map) => void }) {
 export default function MapPage() {
   const { t } = useT()
   const navigate = useNavigate()
+  const isDark = useIsDark()
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | StatusKey>("all")
@@ -275,8 +298,11 @@ export default function MapPage() {
             <MapRefBinder bind={(m) => (mapRef.current = m)} />
             <InvalidateSize ready={!isLoading} />
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              key={isDark ? "dark" : "light"}
+              attribution={TILES_ATTRIB}
+              url={isDark ? TILES_DARK : TILES_LIGHT}
+              subdomains={["a", "b", "c", "d"]}
+              maxZoom={19}
             />
             {filtered.map((v) => {
               const status = (v.status as StatusKey) ?? "inactive"
@@ -291,14 +317,25 @@ export default function MapPage() {
                   }}
                 >
                   <Popup>
-                    <div className="min-w-[200px] space-y-1.5">
-                      <p className="m-0 text-sm font-semibold text-ink">{v.name}</p>
-                      <p className="m-0 text-[11px] text-ink-3">
+                    <div
+                      className="min-w-[200px] space-y-1.5"
+                      style={{ color: "hsl(var(--ink))" }}
+                    >
+                      <p
+                        className="m-0 text-sm font-semibold"
+                        style={{ color: "hsl(var(--ink))" }}
+                      >
+                        {v.name}
+                      </p>
+                      <p
+                        className="m-0 text-[11px]"
+                        style={{ color: "hsl(var(--ink-3))" }}
+                      >
                         {v.city ?? "—"}{v.address ? ` · ${v.address}` : ""}
                       </p>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={v.status} />
-                        <span className="text-[11px] text-ink-3">
+                        <span className="text-[11px]" style={{ color: "hsl(var(--ink-3))" }}>
                           {formatCurrency(v.pricePerHour)}/{t("hour_short")}
                         </span>
                       </div>
@@ -306,19 +343,28 @@ export default function MapPage() {
                         <button
                           type="button"
                           onClick={() => navigate(`/venues/${v.id}`)}
-                          className="inline-flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground hover:opacity-90"
+                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold hover:opacity-90"
+                          style={{
+                            background: "hsl(var(--primary))",
+                            color: "hsl(var(--primary-foreground))",
+                          }}
                         >
                           <ExternalLink className="h-3 w-3" />
-                          {t("view") ?? "View"}
+                          {t("view")}
                         </button>
                         <a
                           href={`https://www.google.com/maps?q=${v.latitude},${v.longitude}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-1 rounded-md border border-line-strong px-2 py-1 text-[11px] font-semibold text-ink-2 hover:bg-surface-2"
+                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold"
+                          style={{
+                            border: "1px solid hsl(var(--line-strong))",
+                            color: "hsl(var(--ink-2))",
+                            background: "transparent",
+                          }}
                         >
                           <Navigation className="h-3 w-3" />
-                          {t("directions") ?? "Directions"}
+                          {t("directions")}
                         </a>
                       </div>
                     </div>
