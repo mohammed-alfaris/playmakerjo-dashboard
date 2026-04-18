@@ -17,6 +17,7 @@ const NotificationsPage = lazy(() => import("@/features/notifications/Notificati
 const ReviewsPage = lazy(() => import("@/features/reviews/ReviewsPage"))
 const TimelinePage = lazy(() => import("@/features/timeline/TimelinePage"))
 const MapPage = lazy(() => import("@/features/map/MapPage"))
+const SettingsPage = lazy(() => import("@/features/settings/SettingsPage"))
 
 function PageLoader() {
   return (
@@ -77,6 +78,7 @@ export const router = createBrowserRouter([
       { path: "reports",        element: <LazyPage><ReportsPage /></LazyPage> },
       { path: "notifications", element: <AdminRoute><LazyPage><NotificationsPage /></LazyPage></AdminRoute> },
       { path: "reviews",    element: <AdminRoute><LazyPage><ReviewsPage /></LazyPage></AdminRoute> },
+      { path: "settings",   element: <AdminRoute><LazyPage><SettingsPage /></LazyPage></AdminRoute> },
       { path: "profile",    element: <LazyPage><ProfilePage /></LazyPage> },
       { path: "*",          element: <Navigate to="/" replace /> },
     ],
