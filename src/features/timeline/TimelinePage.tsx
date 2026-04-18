@@ -1111,6 +1111,7 @@ function AssignBookingDialog({
         duration,
         paymentMethod: "cliq",
         notes: `${notePrefix}${walkIn}${extra}`.trim(),
+        isManual: true,
       })
       return res.data
     },
