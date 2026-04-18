@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { Plus, Pencil, Trash2, Search, MapPin as MapPinIcon, X, CheckCircle, XCircle } from "lucide-react"
+import { Plus, Pencil, Trash2, Search, MapPin as MapPinIcon, X, CheckCircle, XCircle, Power, PowerOff } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { DataTable } from "@/components/shared/DataTable"
@@ -54,6 +54,7 @@ export default function VenuesPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editVenue, setEditVenue] = useState<Venue | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Venue | null>(null)
+  const [toggleTarget, setToggleTarget] = useState<Venue | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -99,6 +100,17 @@ export default function VenuesPage() {
       queryClient.invalidateQueries({ queryKey: ["venues"] })
     },
     onError: () => toast.error(t("venue_approval_failed")),
+  })
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "active" | "inactive" }) =>
+      updateVenueStatus(id, status),
+    onSuccess: (_, vars) => {
+      toast.success(vars.status === "active" ? t("venue_reactivated") : t("venue_deactivated"))
+      queryClient.invalidateQueries({ queryKey: ["venues"] })
+      setToggleTarget(null)
+    },
+    onError: () => toast.error(t("venue_status_update_failed")),
   })
 
   const columns: ColumnDef<Venue>[] = [
@@ -184,6 +196,29 @@ export default function VenuesPage() {
                   {t("reject_venue")}
                 </Button>
               </>
+            )}
+            {!isPending && isAdmin && (
+              venue.status === "active" ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                  onClick={() => setToggleTarget(venue)}
+                  title={t("deactivate_venue")}
+                >
+                  <PowerOff className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/40"
+                  onClick={() => setToggleTarget(venue)}
+                  title={t("reactivate_venue")}
+                >
+                  <Power className="h-4 w-4" />
+                </Button>
+              )
             )}
             <Button
               variant="ghost"
@@ -301,6 +336,36 @@ export default function VenuesPage() {
         confirmLabel={t("delete_venue")}
         isLoading={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
+
+      <ConfirmDialog
+        open={!!toggleTarget}
+        onOpenChange={(v) => { if (!v) setToggleTarget(null) }}
+        title={
+          toggleTarget?.status === "active"
+            ? t("deactivate_venue")
+            : t("reactivate_venue")
+        }
+        description={
+          (toggleTarget?.status === "active"
+            ? t("deactivate_venue_confirm")
+            : t("reactivate_venue_confirm")
+          ).replace("{name}", toggleTarget?.name ?? "")
+        }
+        confirmLabel={
+          toggleTarget?.status === "active"
+            ? t("deactivate_venue")
+            : t("reactivate_venue")
+        }
+        variant={toggleTarget?.status === "active" ? "destructive" : "default"}
+        isLoading={toggleMutation.isPending}
+        onConfirm={() =>
+          toggleTarget &&
+          toggleMutation.mutate({
+            id: toggleTarget.id,
+            status: toggleTarget.status === "active" ? "inactive" : "active",
+          })
+        }
       />
     </div>
   )
