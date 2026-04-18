@@ -15,27 +15,11 @@ import { cn } from "@/lib/utils"
 const DEFAULT_CENTER: [number, number] = [31.9539, 35.9106]
 const DEFAULT_ZOOM = 8
 
-// CartoDB tile endpoints (free, no API key). Dark for dark mode, light for light.
-const TILES_DARK  = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-const TILES_LIGHT = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+// Use OSM tiles. A CSS filter on `.leaflet-tile-pane` recolors them
+// in dark mode so roads and labels stay readable in both themes.
+const TILES_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 const TILES_ATTRIB =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-
-/** Tracks the `dark` class on <html> so Leaflet can swap tile themes. */
-function useIsDark() {
-  const [isDark, setIsDark] = useState<boolean>(
-    typeof document !== "undefined" && document.documentElement.classList.contains("dark")
-  )
-  useEffect(() => {
-    const root = document.documentElement
-    const update = () => setIsDark(root.classList.contains("dark"))
-    update()
-    const obs = new MutationObserver(update)
-    obs.observe(root, { attributes: true, attributeFilter: ["class"] })
-    return () => obs.disconnect()
-  }, [])
-  return isDark
-}
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 
 type StatusKey = "active" | "inactive" | "pending"
 
@@ -89,7 +73,6 @@ function MapRefBinder({ bind }: { bind: (m: L.Map) => void }) {
 export default function MapPage() {
   const { t } = useT()
   const navigate = useNavigate()
-  const isDark = useIsDark()
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | StatusKey>("all")
@@ -298,10 +281,8 @@ export default function MapPage() {
             <MapRefBinder bind={(m) => (mapRef.current = m)} />
             <InvalidateSize ready={!isLoading} />
             <TileLayer
-              key={isDark ? "dark" : "light"}
               attribution={TILES_ATTRIB}
-              url={isDark ? TILES_DARK : TILES_LIGHT}
-              subdomains={["a", "b", "c", "d"]}
+              url={TILES_URL}
               maxZoom={19}
             />
             {filtered.map((v) => {

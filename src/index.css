@@ -250,33 +250,41 @@
 
 /* ───────────────────────────────────────────────────────────────────
    Leaflet — stadium theming (popups + attribution + controls)
+   `!important` because the Leaflet CSS chunk ships with the lazy
+   MapPage bundle and loads AFTER index.css; without !important
+   Leaflet's defaults win on specificity ties.
    ─────────────────────────────────────────────────────────────── */
 .leaflet-container {
-  background: hsl(var(--surface-2));
-  font-family: inherit;
+  background: hsl(var(--surface-2)) !important;
+  font-family: inherit !important;
+}
+.dark .leaflet-container { background: #0b1018 !important; }
+
+/* Dark-mode tile recolor — classic invert + hue-rotate night map.
+   Keeps every road/label visible while matching the stadium palette.
+   Only affects the tile pane; markers, popups, controls are untouched. */
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.85);
 }
 
-/* Dark tile fallback color while tiles load */
-.dark .leaflet-container { background: #0b1018; }
-
-/* Popup card — use card surface + ink text, match rounded-2xl */
+/* Popup card */
 .leaflet-popup-content-wrapper {
-  background: hsl(var(--card));
-  color: hsl(var(--ink));
-  border: 1px solid hsl(var(--line-strong));
-  border-radius: 14px;
-  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.45);
-  padding: 2px;
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--ink)) !important;
+  border: 1px solid hsl(var(--line-strong)) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.45) !important;
+  padding: 2px !important;
 }
 .leaflet-popup-content {
-  color: hsl(var(--ink));
-  margin: 10px 12px;
-  line-height: 1.35;
+  color: hsl(var(--ink)) !important;
+  margin: 10px 12px !important;
+  line-height: 1.35 !important;
 }
 .leaflet-popup-tip {
-  background: hsl(var(--card));
-  border: 1px solid hsl(var(--line-strong));
-  box-shadow: none;
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--line-strong)) !important;
+  box-shadow: none !important;
 }
 .leaflet-popup-close-button,
 .leaflet-popup-close-button:hover {
@@ -285,28 +293,21 @@
 }
 .leaflet-popup-close-button:hover { color: hsl(var(--ink)) !important; }
 
-/* Attribution strip */
-.leaflet-control-attribution {
-  background: hsl(var(--card) / 0.85) !important;
-  color: hsl(var(--ink-3)) !important;
-  border-radius: 6px;
-  border: 1px solid hsl(var(--line-strong));
-  backdrop-filter: blur(4px);
-}
-.leaflet-control-attribution a { color: hsl(var(--brand)) !important; }
+/* Attribution strip — hidden per design */
+.leaflet-control-attribution { display: none !important; }
 
 /* Zoom controls */
+.leaflet-bar {
+  border: 1px solid hsl(var(--line-strong)) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.3) !important;
+}
 .leaflet-bar a,
 .leaflet-bar a:hover {
-  background: hsl(var(--card));
-  color: hsl(var(--ink));
-  border-bottom-color: hsl(var(--line-strong));
+  background: hsl(var(--card)) !important;
+  color: hsl(var(--ink)) !important;
+  border-bottom-color: hsl(var(--line-strong)) !important;
 }
-.leaflet-bar a:hover { background: hsl(var(--surface-2)); }
-.leaflet-bar {
-  border: 1px solid hsl(var(--line-strong));
-  border-radius: 10px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.3);
-}
+.leaflet-bar a:hover { background: hsl(var(--surface-2)) !important; }
 
