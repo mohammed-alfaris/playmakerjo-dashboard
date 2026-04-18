@@ -5,6 +5,7 @@ export const translations = {
     // Nav
     nav_dashboard: "Dashboard",
     nav_venues: "Venues",
+    nav_map: "Map",
     nav_users: "Users",
     nav_bookings: "Bookings",
     nav_payments: "Payments",
@@ -371,11 +372,25 @@ export const translations = {
     filterVenue: "Venue",
     filterStatus: "Status",
     noReviewsFound: "No reviews found",
+    // Map page
+    map_title: "Pitches map",
+    map_subtitle: "All venues with GPS coordinates, shown across Jordan.",
+    reset_view: "Reset view",
+    on_map: "On map",
+    no_coordinates: "No coords",
+    no_venues_on_map: "No venues match your filters.",
+    results: "Results",
+    all: "All",
+    view: "View",
+    directions: "Directions",
+    legend: "Legend",
+    hour_short: "hr",
   },
   ar: {
     // Nav
     nav_dashboard: "لوحة التحكم",
     nav_venues: "الملاعب",
+    nav_map: "الخريطة",
     nav_users: "المستخدمون",
     nav_bookings: "الحجوزات",
     nav_payments: "المدفوعات",
@@ -742,6 +757,19 @@ export const translations = {
     filterVenue: "الملعب",
     filterStatus: "الحالة",
     noReviewsFound: "لا توجد تقييمات",
+    // Map page
+    map_title: "خريطة الملاعب",
+    map_subtitle: "جميع الملاعب ذات الإحداثيات، معروضة على خريطة الأردن.",
+    reset_view: "إعادة التمركز",
+    on_map: "على الخريطة",
+    no_coordinates: "بدون إحداثيات",
+    no_venues_on_map: "لا توجد ملاعب مطابقة.",
+    results: "النتائج",
+    all: "الكل",
+    view: "عرض",
+    directions: "الاتجاهات",
+    legend: "الدليل",
+    hour_short: "س",
   },
 } as const
 

@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom"
 import {
   LayoutDashboard,
   MapPin,
+  Map as MapIcon,
   Users,
   CalendarCheck,
   CalendarClock,
@@ -33,6 +34,7 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
     items: [
       { href: "/",         labelKey: "nav_dashboard", icon: LayoutDashboard, roles: ["super_admin", "venue_owner"] },
       { href: "/venues",   labelKey: "nav_venues",    icon: MapPin,          roles: ["super_admin", "venue_owner"] },
+      { href: "/map",      labelKey: "nav_map",       icon: MapIcon,         roles: ["super_admin"] },
       { href: "/timeline", labelKey: "slot_timeline", icon: CalendarClock,   roles: ["super_admin", "venue_owner"] },
       { href: "/bookings", labelKey: "nav_bookings",  icon: CalendarCheck,   roles: ["super_admin", "venue_owner"] },
     ],
