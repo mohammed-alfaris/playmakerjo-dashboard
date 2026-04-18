@@ -1,28 +1,43 @@
 import { useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
-import { ChevronLeft, ChevronRight, User, ArrowRight } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
+  Plus,
+  Clock,
+  Loader2,
+  BarChart3,
+  CalendarCheck,
+  Coins,
+} from "lucide-react"
+import { toast } from "sonner"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import api from "@/api/axios"
 import { getBookings, type Booking } from "@/api/bookings"
 import { useRole } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
+import type { TranslationKey } from "@/i18n/translations"
 import { formatCurrency } from "@/lib/formatters"
 import type { OperatingHours, DayHours } from "@/lib/types"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 
 // ---- helpers ----------------------------------------------------------------
 
-/**
- * Backend returns short keys ("fri", "mon", ...) but the TS type uses long
- * names. Accept BOTH by indexing with a pair of keys per day, in this order:
- * Sunday → [sun, sunday], Monday → [mon, monday], etc.
- */
 const DAY_KEY_PAIRS: [string, string][] = [
   ["sun", "sunday"],
   ["mon", "monday"],
@@ -41,8 +56,6 @@ function resolveDay(oh: OperatingHours | undefined, weekdayIdx: number): DayHour
 }
 
 function toISODate(d: Date): string {
-  // Use LOCAL date components — toISOString() shifts to UTC and can roll back
-  // the date in GMT+ timezones (Jordan is GMT+3).
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, "0")
   const day = String(d.getDate()).padStart(2, "0")
@@ -64,6 +77,12 @@ function parseTime(hhmm: string | undefined): number | null {
   return h * 60 + min
 }
 
+function formatHour(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+}
+
 function formatMinutes(mins: number): string {
   const h = Math.floor(mins / 60)
   const m = mins % 60
@@ -72,23 +91,30 @@ function formatMinutes(mins: number): string {
   return `${h12}:${m.toString().padStart(2, "0")} ${suffix}`
 }
 
-interface Slot {
+type SlotState = "open" | "past" | "booked" | "spanned"
+
+interface HourCell {
   /** Start offset in minutes from midnight */
   startMin: number
-  /** End offset in minutes from midnight */
-  endMin: number
-  status: "past" | "open" | "booked"
+  state: SlotState
+  /** For booked cells, how many 1-hour slots this booking spans (1 or 2) */
+  span?: number
   booking?: Booking
+  pendingReview?: boolean
 }
 
-function buildSlots({
+/**
+ * Build hour-bucket cells (1 per operating hour). Bookings that span multiple
+ * hours collapse adjacent cells into a single cell with span=N, and following
+ * cells get state="spanned" so they aren't rendered.
+ */
+function buildHourCells({
   operatingHours,
   weekdayIdx,
   bookings,
   now,
   isToday,
   isPastDate,
-  stepMin = 30,
 }: {
   operatingHours?: OperatingHours
   weekdayIdx: number
@@ -96,65 +122,60 @@ function buildSlots({
   now: Date
   isToday: boolean
   isPastDate: boolean
-  stepMin?: number
-}): Slot[] {
+}): { cells: HourCell[]; startHour: number; endHour: number } {
   const dh = resolveDay(operatingHours, weekdayIdx)
-  if (!dh || dh.closed) return []
+  if (!dh || dh.closed) return { cells: [], startHour: 0, endHour: 0 }
   const start = parseTime(dh.open)
   const end = parseTime(dh.close)
-  if (start == null || end == null) return []
-  // Overnight venues: close < open means we cap at 24:00 for simplicity (v1).
+  if (start == null || end == null) return { cells: [], startHour: 0, endHour: 0 }
+  const startHour = Math.floor(start / 60)
   const endCapped = end <= start ? 24 * 60 : end
-  const slots: Slot[] = []
+  const endHour = Math.ceil(endCapped / 60)
 
   const nowMin = isToday ? now.getHours() * 60 + now.getMinutes() : -1
+  const cells: HourCell[] = []
 
-  for (let m = start; m + stepMin <= endCapped; m += stepMin) {
-    const slotEnd = m + stepMin
-    // Past if entire date already passed, OR today and slot ended
-    let status: Slot["status"] = "open"
+  for (let h = startHour; h < endHour; h++) {
+    const hourStart = h * 60
+    const hourEnd = hourStart + 60
+    let state: SlotState = "open"
+    if (isPastDate) state = "past"
+    else if (isToday && hourEnd <= nowMin) state = "past"
+
     let booking: Booking | undefined
-    if (isPastDate) status = "past"
-    else if (isToday && slotEnd <= nowMin) status = "past"
-
-    // Check overlap against any booking
+    let pending = false
     for (const b of bookings) {
       const bStart = parseTime(b.startTime)
       if (bStart == null) continue
       const bEnd = bStart + (b.duration ?? 0)
-      // Overlap: slot.start < bEnd && slot.end > b.start
-      if (m < bEnd && slotEnd > bStart) {
-        status = "booked"
+      if (hourStart < bEnd && hourEnd > bStart) {
         booking = b
+        state = "booked"
+        pending = b.paymentProofStatus === "pending_review"
         break
       }
     }
-    slots.push({ startMin: m, endMin: slotEnd, status, booking })
+    cells.push({ startMin: hourStart, state, booking, pendingReview: pending })
   }
-  return slots
-}
 
-/**
- * Group consecutive booked slots by the same booking id so the horizontal
- * strip renders one wider block per booking instead of N adjacent cells.
- */
-function groupConsecutive(slots: Slot[]): { slots: Slot[]; span: number }[] {
-  const out: { slots: Slot[]; span: number }[] = []
-  let i = 0
-  while (i < slots.length) {
-    const cur = slots[i]
-    let j = i + 1
-    while (
-      j < slots.length &&
-      slots[j].status === cur.status &&
-      slots[j].booking?.id === cur.booking?.id
-    ) {
-      j += 1
+  // Collapse consecutive booked cells belonging to the same booking id
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i]
+    if (c.state !== "booked" || !c.booking) continue
+    let span = 1
+    for (let j = i + 1; j < cells.length; j++) {
+      if (cells[j].state === "booked" && cells[j].booking?.id === c.booking.id) {
+        cells[j].state = "spanned"
+        span += 1
+      } else {
+        break
+      }
     }
-    out.push({ slots: slots.slice(i, j), span: j - i })
-    i = j
+    c.span = span
+    i += span - 1
   }
-  return out
+
+  return { cells, startHour, endHour }
 }
 
 // ---- component --------------------------------------------------------------
@@ -162,14 +183,20 @@ function groupConsecutive(slots: Slot[]): { slots: Slot[]; span: number }[] {
 export function VenueSlotTimeline({
   venueId,
   operatingHours,
+  sports,
+  pricePerHour,
 }: {
   venueId: string
   operatingHours?: OperatingHours
+  sports?: string[]
+  pricePerHour?: number
 }) {
   const { t, lang } = useT()
   const { isAdmin, isOwner } = useRole()
   const navigate = useNavigate()
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualPreset, setManualPreset] = useState<{ startMin: number } | null>(null)
 
   const now = new Date()
   const iso = toISODate(selectedDate)
@@ -186,190 +213,247 @@ export function VenueSlotTimeline({
   })
   const bookings: Booking[] = data?.data ?? []
 
-  const slots = useMemo(
-    () => buildSlots({ operatingHours, weekdayIdx, bookings, now, isToday, isPastDate }),
-    // now is re-evaluated each render; that's fine for minute-level accuracy
+  const { cells, startHour, endHour } = useMemo(
+    () => buildHourCells({ operatingHours, weekdayIdx, bookings, now, isToday, isPastDate }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [operatingHours, weekdayIdx, bookings, iso]
   )
 
-  const isClosed = !slots.length
+  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
+  const isClosed = cells.length === 0
+  const canManage = isAdmin || isOwner
   const canSeeNames = isAdmin || isOwner
 
-  const stripGroups = useMemo(() => groupConsecutive(slots), [slots])
-
   const locale = lang === "ar" ? "ar-JO" : "en-GB"
-  const dateLabel = selectedDate.toLocaleDateString(locale, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
+
+  // Day label
+  const displayDate = new Date(iso + "T00:00:00")
+  const dayOffsetDays = Math.round(
+    (displayDate.getTime() - new Date(todayIso + "T00:00:00").getTime()) / 86400000
+  )
+  const dayLabel = (() => {
+    if (dayOffsetDays === 0) return t("today")
+    if (dayOffsetDays === 1) return t("tomorrow") ?? "Tomorrow"
+    if (dayOffsetDays === -1) return t("yesterday") ?? "Yesterday"
+    return displayDate.toLocaleDateString(locale, { weekday: "long" })
+  })()
+  const dateMono = displayDate.toLocaleDateString(locale, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   })
+
+  // Stats for the day
+  const bookedCount = cells.filter((c) => c.state === "booked").length
+  const spannedCount = cells.filter((c) => c.state === "spanned").length
+  const totalBooked = bookedCount + spannedCount
+  const openCount = cells.filter((c) => c.state === "open").length
+  const utilization = cells.length ? Math.round((totalBooked / cells.length) * 100) : 0
+  const uniqueBookings = bookedCount
+  const dayRevenue = bookings.reduce(
+    (acc, b) => acc + (b.totalAmount ?? b.amount ?? 0),
+    0
+  )
 
   function go(delta: number) {
     setSelectedDate((d) => addDays(d, delta))
   }
 
   function onDateInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value // "YYYY-MM-DD"
+    const v = e.target.value
     if (!v) return
     const [y, m, d] = v.split("-").map(Number)
     setSelectedDate(new Date(y, m - 1, d))
   }
 
+  function openManualFor(startMin: number) {
+    setManualPreset({ startMin })
+    setManualOpen(true)
+  }
+
   return (
-    <section className="rounded-xl bg-card p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-3.5">
+      {/* Page header */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-foreground">
-            {t("todays_slots")}
+          <h2 className="display text-[20px] font-semibold tracking-[-0.02em] text-ink leading-none">
+            {t("slot_timeline") ?? "Slot Timeline"}
           </h2>
-          <p className="text-xs text-muted-foreground">{dateLabel}</p>
+          <p className="mt-1 text-[13px] text-ink-3">
+            {t("slot_timeline_subtitle") ?? "Live availability grid for this court"}
+          </p>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
+      </div>
+
+      {/* Controls card: date stepper + legend */}
+      <div className="flex flex-wrap items-center gap-3.5 rounded-2xl bg-card p-3.5 shadow-stadium-sm">
+        {/* Date stepper */}
+        <div className="flex items-center gap-1 rounded-lg bg-surface-2 p-1">
+          <button
+            type="button"
             onClick={() => go(-1)}
             aria-label={t("previous_day")}
+            className="rounded-md p-1.5 text-ink-2 transition-colors hover:bg-card"
           >
-            <ChevronLeft className="h-4 w-4 rtl:rotate-180" />
-          </Button>
-          <input
-            type="date"
-            value={iso}
-            onChange={onDateInput}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs"
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
+            <ChevronLeft className="h-3.5 w-3.5 rtl-flip" />
+          </button>
+          <div className="min-w-[160px] px-3 text-center">
+            <div className="text-[13px] font-semibold text-ink leading-tight">
+              {dayLabel}
+            </div>
+            <div className="mono text-[10px] text-ink-3">{dateMono}</div>
+          </div>
+          <button
+            type="button"
             onClick={() => go(1)}
             aria-label={t("next_day")}
+            className="rounded-md p-1.5 text-ink-2 transition-colors hover:bg-card"
           >
-            <ChevronRight className="h-4 w-4 rtl:rotate-180" />
+            <ChevronRight className="h-3.5 w-3.5 rtl-flip" />
+          </button>
+        </div>
+
+        {/* Jump to date input */}
+        <input
+          type="date"
+          value={iso}
+          onChange={onDateInput}
+          className="mono h-8 rounded-md border border-line bg-card px-2 text-[11px] text-ink focus:border-primary focus:outline-none"
+          aria-label="Jump to date"
+        />
+
+        {!isToday && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => setSelectedDate(new Date())}
+          >
+            {t("today")}
           </Button>
-          {!isToday && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs"
-              onClick={() => setSelectedDate(new Date())}
-            >
-              {t("today")}
-            </Button>
-          )}
+        )}
+
+        {canManage && (
+          <Button
+            size="sm"
+            className="h-8 gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={() => {
+              setManualPreset(null)
+              setManualOpen(true)
+            }}
+            disabled={isPastDate || isClosed}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("add_manual_booking") ?? "Add booking"}
+          </Button>
+        )}
+
+        {/* Push legend to end */}
+        <div className="flex-1" />
+
+        {/* Legend — inline on the right */}
+        <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-ink-2">
+          <LegendSwatch variant="open" label={t("open")} />
+          <LegendSwatch variant="booked" label={t("booked")} />
+          <LegendSwatch
+            variant="pending"
+            label={t("pending_review") ?? "Pending"}
+          />
+          <LegendSwatch variant="past" label={t("past")} />
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <LegendDot className="bg-primary/15 border border-primary/30" />
-        <span>{t("open")}</span>
-        <LegendDot className="bg-primary" />
-        <span>{t("booked")}</span>
-        <LegendDot className="bg-muted" />
-        <span>{t("past")}</span>
-      </div>
-
+      {/* Loading */}
       {isLoading && (
-        <div className="h-12 animate-pulse rounded-md bg-muted/40" />
+        <div className="shim h-[104px] w-full rounded-2xl" />
       )}
 
+      {/* Closed */}
       {!isLoading && isClosed && (
-        <p className="text-sm text-muted-foreground py-6 text-center">
-          {t("venue_closed_day")}
-        </p>
+        <div className="rounded-2xl bg-card p-10 text-center shadow-stadium-sm">
+          <p className="text-sm text-ink-2">{t("venue_closed_day")}</p>
+        </div>
       )}
 
+      {/* Grid */}
       {!isLoading && !isClosed && (
-        <>
-          {/* Desktop: horizontal strip (md+) */}
-          <div className="hidden md:block">
-            <div className="flex w-full overflow-hidden rounded-md border border-border">
-              {stripGroups.map((g, i) => {
-                const first = g.slots[0]
-                const cellClass = cn(
-                  "relative h-10 flex items-center justify-center text-[10px] font-medium border-e border-border last:border-e-0 transition-colors",
-                  first.status === "past" && "bg-muted text-muted-foreground",
-                  first.status === "open" && "bg-primary/10 text-primary hover:bg-primary/15",
-                  first.status === "booked" && "bg-primary text-primary-foreground hover:opacity-90 cursor-pointer"
-                )
-                const content =
-                  first.status === "booked" && first.booking ? (
-                    <span className="truncate px-2">
-                      {canSeeNames ? first.booking.player.name : t("booked")}
-                    </span>
-                  ) : null
-                const style = { flex: g.span }
-                if (first.status === "booked" && first.booking) {
-                  return (
-                    <BookingPopover
-                      key={`${first.startMin}-${i}`}
-                      booking={first.booking}
-                      startMin={first.startMin}
-                      endMin={g.slots[g.slots.length - 1].endMin}
-                      canSeeNames={canSeeNames}
-                      venueId={venueId}
-                      onGoToBookings={() =>
-                        navigate(`/bookings?venue=${venueId}&from=${iso}&to=${iso}`)
-                      }
-                    >
-                      <button type="button" className={cellClass} style={style}>
-                        {content}
-                      </button>
-                    </BookingPopover>
-                  )
-                }
+        <div className="rounded-2xl bg-card p-4 shadow-stadium-sm">
+          {/* Desktop grid */}
+          <div className="hidden overflow-x-auto md:block">
+            <div
+              className="grid min-w-[900px] gap-1"
+              style={{
+                gridTemplateColumns: `100px repeat(${hours.length}, minmax(56px, 1fr))`,
+              }}
+            >
+              {/* Header row: empty + hour labels */}
+              <div />
+              {hours.map((h) => (
+                <div
+                  key={h}
+                  className="mono pb-2 text-center text-[10px] font-semibold text-ink-3"
+                >
+                  {String(h).padStart(2, "0")}:00
+                </div>
+              ))}
+
+              {/* Court 1 row */}
+              <div className="flex items-center gap-2 text-[12px] font-semibold text-ink-2">
+                <div className="mono flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 text-[10px] text-ink-2">
+                  1
+                </div>
+                {t("court") ?? "Court"} 1
+              </div>
+              {cells.map((c, i) => {
+                if (c.state === "spanned") return null
                 return (
-                  <div key={`${first.startMin}-${i}`} className={cellClass} style={style}>
-                    {first.status === "past" && g.span >= 2 && (
-                      <span className="opacity-60">{formatMinutes(first.startMin)}</span>
-                    )}
-                  </div>
+                  <TimelineCell
+                    key={`${c.startMin}-${i}`}
+                    cell={c}
+                    canSeeNames={canSeeNames}
+                    canManage={canManage}
+                    venueId={venueId}
+                    onOpenManual={openManualFor}
+                    onGoToBookings={() =>
+                      navigate(
+                        `/bookings?venue=${venueId}&from=${iso}&to=${iso}`
+                      )
+                    }
+                    t={t}
+                  />
                 )
               })}
             </div>
-            {/* Hour axis */}
-            <div className="flex mt-1 text-[10px] text-muted-foreground">
-              {slots.filter((_, idx) => idx % 2 === 0).map((s) => (
-                <div
-                  key={s.startMin}
-                  style={{ flex: 1 }}
-                  className="text-center"
-                >
-                  {s.startMin % 60 === 0 ? formatMinutes(s.startMin).replace(" ", "") : ""}
-                </div>
-              ))}
-            </div>
 
-            {/* Now indicator */}
-            {isToday && <NowLine slots={slots} now={now} />}
+            {/* Now indicator overlay */}
+            {isToday && <NowLine startHour={startHour} endHour={endHour} now={now} />}
           </div>
 
-          {/* Mobile: vertical list (below md) */}
-          <ul className="md:hidden divide-y divide-border/50">
-            {slots.map((s, i) => {
-              const label = `${formatMinutes(s.startMin)} — ${formatMinutes(s.endMin)}`
-              if (s.status === "booked" && s.booking) {
+          {/* Mobile list */}
+          <ul className="md:hidden divide-y divide-line/50">
+            {cells.map((c, i) => {
+              if (c.state === "spanned") return null
+              const hourStart = c.startMin
+              const hourEnd = c.startMin + (c.span ?? 1) * 60
+              const label = `${formatMinutes(hourStart)} — ${formatMinutes(hourEnd)}`
+              if (c.state === "booked" && c.booking) {
                 return (
                   <BookingPopover
                     key={i}
-                    booking={s.booking}
-                    startMin={s.startMin}
-                    endMin={s.endMin}
+                    booking={c.booking}
+                    startMin={hourStart}
+                    endMin={hourEnd}
                     canSeeNames={canSeeNames}
                     venueId={venueId}
                     onGoToBookings={() =>
                       navigate(`/bookings?venue=${venueId}&from=${iso}&to=${iso}`)
                     }
                   >
-                    <li className="flex items-center justify-between gap-3 px-2 py-2.5 cursor-pointer hover:bg-muted/40 rounded">
-                      <span className="font-mono text-xs text-foreground">{label}</span>
-                      <span className="flex items-center gap-2 text-sm text-primary font-medium">
-                        <User className="h-3.5 w-3.5" />
-                        {canSeeNames ? s.booking.player.name : t("booked")}
+                    <li className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
+                      <span className="mono text-[11px] text-ink-2">{label}</span>
+                      <span className="flex items-center gap-2 text-sm font-medium text-primary">
+                        <span className="h-1.5 w-1.5 rounded-full bg-lime" />
+                        {canSeeNames ? c.booking.player.name : t("booked")}
                       </span>
                     </li>
                   </BookingPopover>
@@ -379,51 +463,263 @@ export function VenueSlotTimeline({
                 <li
                   key={i}
                   className={cn(
-                    "flex items-center justify-between gap-3 px-2 py-2.5",
-                    s.status === "past" && "opacity-60"
+                    "flex items-center justify-between gap-3 px-3 py-2.5",
+                    c.state === "past" && "opacity-60",
+                    c.state === "open" && canManage && "cursor-pointer hover:bg-primary/5"
                   )}
+                  onClick={() => {
+                    if (c.state === "open" && canManage) openManualFor(c.startMin)
+                  }}
                 >
-                  <span className="font-mono text-xs text-foreground">{label}</span>
+                  <span className="mono text-[11px] text-ink-2">{label}</span>
                   <span
                     className={cn(
-                      "text-xs",
-                      s.status === "past" ? "text-muted-foreground" : "text-primary"
+                      "text-[11px] font-medium",
+                      c.state === "past" && "text-ink-3",
+                      c.state === "open" && "text-primary"
                     )}
                   >
-                    {s.status === "past" ? t("past") : t("open")}
+                    {c.state === "past" ? t("past") : t("open")}
                   </span>
                 </li>
               )
             })}
           </ul>
-        </>
+        </div>
       )}
-    </section>
+
+      {/* Summary strip */}
+      {!isLoading && !isClosed && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <SummaryCard
+            icon={<BarChart3 className="h-4 w-4" />}
+            label={t("utilization") ?? "Utilization"}
+            value={`${utilization}%`}
+            tone="brand"
+          />
+          <SummaryCard
+            icon={<Plus className="h-4 w-4" />}
+            label={t("open_slots") ?? "Open slots"}
+            value={openCount}
+            tone="brand"
+          />
+          <SummaryCard
+            icon={<CalendarCheck className="h-4 w-4" />}
+            label={t("bookings") ?? "Bookings"}
+            value={uniqueBookings}
+            tone="brand"
+          />
+          <SummaryCard
+            icon={<Coins className="h-4 w-4" />}
+            label={t("day_revenue") ?? "Day revenue"}
+            value={formatCurrency(dayRevenue)}
+            tone="brand"
+          />
+        </div>
+      )}
+
+      {/* Manual booking dialog */}
+      {manualOpen && (
+        <ManualBookingDialog
+          venueId={venueId}
+          date={iso}
+          preset={manualPreset}
+          sports={sports}
+          pricePerHour={pricePerHour}
+          cells={cells}
+          onClose={() => setManualOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ---- timeline cell ---------------------------------------------------------
+
+function TimelineCell({
+  cell,
+  canSeeNames,
+  canManage,
+  venueId,
+  onOpenManual,
+  onGoToBookings,
+  t,
+}: {
+  cell: HourCell
+  canSeeNames: boolean
+  canManage: boolean
+  venueId: string
+  onOpenManual: (startMin: number) => void
+  onGoToBookings: () => void
+  t: (key: TranslationKey) => string
+}) {
+  const span = cell.span ?? 1
+  const h = Math.floor(cell.startMin / 60)
+  const hourLabel = `${String(h).padStart(2, "0")}:00`
+
+  if (cell.state === "booked" && cell.booking) {
+    const isPending = cell.pendingReview
+    const className = cn(
+      "h-11 rounded-md px-2 flex items-center gap-1.5 text-[11px] font-semibold overflow-hidden w-full cursor-pointer transition-transform hover:scale-[1.01]",
+      isPending
+        ? "bg-amber-tint text-amber-ink"
+        : "bg-primary text-primary-foreground"
+    )
+    const endHour = (cell.startMin + span * 60) / 60
+    return (
+      <div style={{ gridColumn: `span ${span}` }}>
+        <BookingPopover
+          booking={cell.booking}
+          startMin={cell.startMin}
+          endMin={cell.startMin + span * 60}
+          canSeeNames={canSeeNames}
+          venueId={venueId}
+          onGoToBookings={onGoToBookings}
+        >
+          <button type="button" className={className}>
+            {!isPending && (
+              <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-lime shadow-[0_0_6px_hsl(var(--lime))]" />
+            )}
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <div className="truncate">
+                {canSeeNames ? cell.booking.player.name : t("booked")}
+              </div>
+              {span === 2 && (
+                <div className="mono text-[9px] font-medium opacity-85">
+                  {String(h).padStart(2, "0")}:00–{String(endHour).padStart(2, "0")}:00
+                </div>
+              )}
+            </div>
+            {isPending && (
+              <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-amber" />
+            )}
+          </button>
+        </BookingPopover>
+      </div>
+    )
+  }
+
+  if (cell.state === "open") {
+    const cls = cn(
+      "h-11 rounded-md flex items-center justify-center text-[14px] opacity-50 border border-dashed border-line-strong bg-card text-ink-3",
+      canManage && "cursor-pointer hover:border-primary/60 hover:bg-primary/5 hover:text-primary hover:opacity-100"
+    )
+    return (
+      <button
+        type="button"
+        className={cls}
+        onClick={canManage ? () => onOpenManual(cell.startMin) : undefined}
+        aria-label={`Open ${hourLabel}`}
+        disabled={!canManage}
+      >
+        +
+      </button>
+    )
+  }
+
+  // past / blocked
+  return (
+    <div
+      className="h-11 rounded-md bg-surface-3 text-ink-3 [background-image:repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(0,0,0,0.06)_4px,rgba(0,0,0,0.06)_5px)]"
+      aria-label="Past"
+    />
   )
 }
 
 // ---- sub-components ---------------------------------------------------------
 
-function LegendDot({ className }: { className?: string }) {
-  return <span className={cn("h-2.5 w-2.5 rounded-sm", className)} />
+function LegendSwatch({
+  variant,
+  label,
+}: {
+  variant: "open" | "booked" | "pending" | "past"
+  label: string
+}) {
+  const cls = cn(
+    "inline-block h-3 w-3 rounded-[3px] border",
+    variant === "open" && "border-dashed border-line-strong bg-card",
+    variant === "booked" && "border-transparent bg-primary",
+    variant === "pending" && "border-transparent bg-amber-tint",
+    variant === "past" &&
+      "border-transparent bg-surface-3 [background-image:repeating-linear-gradient(45deg,transparent,transparent_3px,rgba(0,0,0,0.1)_3px,rgba(0,0,0,0.1)_4px)]"
+  )
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cls} />
+      <span>{label}</span>
+    </span>
+  )
 }
 
-function NowLine({ slots, now }: { slots: Slot[]; now: Date }) {
+function NowLine({
+  startHour,
+  endHour,
+  now,
+}: {
+  startHour: number
+  endHour: number
+  now: Date
+}) {
   const nowMin = now.getHours() * 60 + now.getMinutes()
-  const first = slots[0]?.startMin ?? 0
-  const last = slots[slots.length - 1]?.endMin ?? 0
-  if (nowMin < first || nowMin > last) return null
-  const pct = ((nowMin - first) / (last - first)) * 100
+  const startMin = startHour * 60
+  const endMin = endHour * 60
+  if (nowMin < startMin || nowMin > endMin) return null
+  // The grid starts with a 100px first column (court label), rest is hours.
+  // Position line relative to the hours area.
+  const labelColPx = 100
+  const pct = ((nowMin - startMin) / (endMin - startMin)) * 100
   return (
     <div
-      className="relative -mt-[44px] h-10 pointer-events-none"
+      className="pointer-events-none relative -mt-[44px] h-11"
       aria-hidden
+      style={{ paddingInlineStart: labelColPx + 4 }}
     >
+      <div className="relative h-full w-[calc(100%-100px-4px)]">
+        <div
+          className="absolute -top-1 bottom-0 w-[2px] bg-rose"
+          style={{ insetInlineStart: `${pct}%` }}
+        >
+          <div className="absolute -top-1.5 -left-[5px] h-3 w-3 rounded-full bg-rose ring-2 ring-card" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  tone = "brand",
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string | number
+  tone?: "brand" | "amber" | "rose" | "indigo"
+}) {
+  const toneCls = {
+    brand: "bg-brand-tint text-brand-ink",
+    amber: "bg-amber-tint text-amber-ink",
+    rose: "bg-rose-tint text-rose-ink",
+    indigo: "bg-indigo-tint text-indigo-ink",
+  }[tone]
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-stadium-sm">
       <div
-        className="absolute top-0 bottom-0 w-0.5 bg-destructive"
-        style={{ left: `${pct}%` }}
+        className={cn(
+          "flex h-9 w-9 flex-none items-center justify-center rounded-lg",
+          toneCls
+        )}
       >
-        <div className="absolute -top-1 -left-1.5 h-2.5 w-2.5 rounded-full bg-destructive" />
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+          {label}
+        </div>
+        <div className="display num text-[20px] font-semibold leading-tight text-ink">
+          {value}
+        </div>
       </div>
     </div>
   )
@@ -449,31 +745,36 @@ function BookingPopover({
   return (
     <Popover>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent className="w-72 p-4 space-y-3" align="center">
+      <PopoverContent className="w-72 space-y-3 p-4" align="center">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-sm font-semibold text-ink">
               {canSeeNames ? booking.player.name : t("booked")}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="mono text-[11px] text-ink-3">
               {formatMinutes(startMin)} — {formatMinutes(endMin)}
             </p>
           </div>
           <StatusBadge status={booking.status} />
         </div>
-        <dl className="text-xs space-y-1.5">
+        <div className="hair" />
+        <dl className="space-y-1.5 text-xs">
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">{t("sport")}</dt>
-            <dd className="font-medium capitalize">{booking.sport}</dd>
+            <dt className="text-ink-3">{t("sport")}</dt>
+            <dd className="font-medium capitalize text-ink">{booking.sport}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-muted-foreground">{t("amount")}</dt>
-            <dd className="font-medium">{formatCurrency(booking.totalAmount ?? booking.amount)}</dd>
+            <dt className="text-ink-3">{t("amount")}</dt>
+            <dd className="num mono font-semibold text-ink">
+              {formatCurrency(booking.totalAmount ?? booking.amount)}
+            </dd>
           </div>
           {booking.paymentMethod && (
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">{t("payment_method")}</dt>
-              <dd className="font-medium uppercase">{booking.paymentMethod}</dd>
+              <dt className="text-ink-3">{t("payment_method")}</dt>
+              <dd className="font-medium uppercase text-ink">
+                {booking.paymentMethod}
+              </dd>
             </div>
           )}
         </dl>
@@ -484,9 +785,212 @@ function BookingPopover({
           onClick={onGoToBookings}
         >
           {t("view_in_bookings")}
-          <ArrowRight className="h-3.5 w-3.5 ms-1.5 rtl:rotate-180" />
+          <ArrowRight className="h-3.5 w-3.5 ms-1.5 rtl-flip" />
         </Button>
       </PopoverContent>
     </Popover>
+  )
+}
+
+// ---- Manual booking dialog --------------------------------------------------
+
+function ManualBookingDialog({
+  venueId,
+  date,
+  preset,
+  sports,
+  pricePerHour,
+  cells,
+  onClose,
+}: {
+  venueId: string
+  date: string
+  preset: { startMin: number } | null
+  sports?: string[]
+  pricePerHour?: number
+  cells: HourCell[]
+  onClose: () => void
+}) {
+  const { t } = useT()
+  const qc = useQueryClient()
+
+  const openStarts = cells
+    .filter((c) => c.state === "open")
+    .map((c) => c.startMin)
+
+  const [startMin, setStartMin] = useState<number>(
+    preset?.startMin ?? openStarts[0] ?? 9 * 60
+  )
+  const [duration, setDuration] = useState<number>(60)
+  const [sport, setSport] = useState<string>(sports?.[0] ?? "football")
+  const [playerName, setPlayerName] = useState("")
+  const [notes, setNotes] = useState("")
+
+  const amount = pricePerHour ? (pricePerHour * duration) / 60 : null
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const res = await api.post("/bookings", {
+        venueId,
+        sport,
+        date,
+        startTime: `${String(Math.floor(startMin / 60)).padStart(2, "0")}:${String(startMin % 60).padStart(2, "0")}`,
+        duration,
+        paymentMethod: "cliq",
+        notes: `[MANUAL] ${playerName ? `Walk-in: ${playerName}. ` : ""}${notes}`.trim(),
+      })
+      return res.data
+    },
+    onSuccess: () => {
+      toast.success(t("manual_booking_created") ?? "Manual booking created")
+      qc.invalidateQueries({ queryKey: ["venue-slots", venueId] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      onClose()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(
+        e.response?.data?.message ?? t("manual_booking_failed") ?? "Failed to create booking"
+      )
+    },
+  })
+
+  const handleSubmit = () => {
+    if (openStarts.length === 0) {
+      toast.error(t("no_open_slots") ?? "No open slots available")
+      return
+    }
+    create.mutate()
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="display text-lg font-semibold tracking-tight">
+            {t("add_manual_booking") ?? "Add manual booking"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <p className="text-xs text-ink-3">
+            {t("manual_booking_hint") ??
+              "Block a slot for a walk-in player or in-person booking. The booking is logged under your account."}
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FieldLabel label={t("start_time") ?? "Start"}>
+              <select
+                value={startMin}
+                onChange={(e) => setStartMin(Number(e.target.value))}
+                className="mono h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink focus:border-primary focus:outline-none"
+              >
+                {openStarts.length === 0 && <option value={startMin}>—</option>}
+                {openStarts.map((m) => (
+                  <option key={m} value={m}>
+                    {formatHour(m)}
+                  </option>
+                ))}
+              </select>
+            </FieldLabel>
+
+            <FieldLabel label={t("duration") ?? "Duration"}>
+              <select
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                className="mono h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink focus:border-primary focus:outline-none"
+              >
+                <option value={30}>30 min</option>
+                <option value={60}>1 h</option>
+                <option value={90}>1 h 30</option>
+                <option value={120}>2 h</option>
+              </select>
+            </FieldLabel>
+          </div>
+
+          <FieldLabel label={t("sport") ?? "Sport"}>
+            <select
+              value={sport}
+              onChange={(e) => setSport(e.target.value)}
+              className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm capitalize text-ink focus:border-primary focus:outline-none"
+            >
+              {(sports && sports.length > 0
+                ? sports
+                : ["football", "basketball", "tennis", "padel", "volleyball"]
+              ).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </FieldLabel>
+
+          <FieldLabel label={t("player_name") ?? "Walk-in player (optional)"}>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              placeholder={t("player_name_placeholder") ?? "Faris Odeh"}
+              className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:outline-none"
+            />
+          </FieldLabel>
+
+          <FieldLabel label={t("notes") ?? "Notes"}>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder={t("notes_placeholder") ?? "Paid cash at venue…"}
+              className="w-full rounded-md border border-line bg-card px-2 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:outline-none"
+            />
+          </FieldLabel>
+
+          {amount != null && (
+            <div className="flex items-center justify-between rounded-lg bg-brand-tint px-3 py-2 text-sm">
+              <span className="text-brand-ink">
+                {t("estimated_amount") ?? "Estimated"}
+              </span>
+              <span className="num mono font-semibold text-brand-ink">
+                {formatCurrency(amount)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={create.isPending}>
+            {t("cancel") ?? "Cancel"}
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={create.isPending || openStarts.length === 0}
+            className="gap-1"
+          >
+            {create.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Clock className="h-3.5 w-3.5" />
+            )}
+            {t("create_booking") ?? "Create booking"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function FieldLabel({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+        {label}
+      </span>
+      {children}
+    </label>
   )
 }

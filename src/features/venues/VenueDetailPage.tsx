@@ -219,7 +219,12 @@ export default function VenueDetailPage() {
 
       {/* Today's slots timeline */}
       {id && venue && (
-        <VenueSlotTimeline venueId={id} operatingHours={venue.operatingHours} />
+        <VenueSlotTimeline
+          venueId={id}
+          operatingHours={venue.operatingHours}
+          sports={venue.sports}
+          pricePerHour={venue.pricePerHour}
+        />
       )}
 
       {/* Venue Info Card */}

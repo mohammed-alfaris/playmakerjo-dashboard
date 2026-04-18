@@ -45,6 +45,7 @@ export default function UsersPage() {
   const [role, setRole]                 = useState("all")
   const [status, setStatus]             = useState("all")
   const [banTarget, setBanTarget]       = useState<User | null>(null)
+  const [roleChangeTarget, setRoleChangeTarget] = useState<{ user: User; newRole: string } | null>(null)
   const [createOpen, setCreateOpen]     = useState(false)
   const avatarInputRef                  = useRef<HTMLInputElement>(null)
   const avatarTargetRef                 = useRef<string | null>(null)
@@ -71,25 +72,59 @@ export default function UsersPage() {
   const users: User[] = data?.data ?? []
   const pagination    = data?.pagination ?? { page, limit, total: 0 }
 
+  // Helper: apply a patch to every cached users list, return the rollback fn.
+  const patchUserInCache = useCallback(
+    (id: string, patch: Partial<User>) => {
+      const snapshots: Array<[readonly unknown[], unknown]> = []
+      queryClient.getQueryCache().findAll({ queryKey: ["users"] }).forEach((q) => {
+        snapshots.push([q.queryKey, q.state.data])
+        queryClient.setQueryData(q.queryKey, (old: unknown) => {
+          if (!old || typeof old !== "object" || !("data" in old)) return old
+          const prev = old as { data: User[] }
+          return { ...prev, data: prev.data.map((u) => (u.id === id ? { ...u, ...patch } : u)) }
+        })
+      })
+      return () => snapshots.forEach(([key, data]) => queryClient.setQueryData(key, data))
+    },
+    [queryClient]
+  )
+
   const statusMutation = useMutation({
     mutationFn: ({ id, newStatus }: { id: string; newStatus: "active" | "banned" }) =>
       updateUserStatus(id, newStatus),
+    onMutate: async ({ id, newStatus }) => {
+      await queryClient.cancelQueries({ queryKey: ["users"] })
+      const rollback = patchUserInCache(id, { status: newStatus })
+      return { rollback }
+    },
     onSuccess: () => {
       toast.success(t("user_status_updated"))
-      queryClient.invalidateQueries({ queryKey: ["users"] })
       setBanTarget(null)
     },
-    onError: () => toast.error(t("user_status_failed")),
+    onError: (_err, _vars, ctx) => {
+      ctx?.rollback?.()
+      toast.error(t("user_status_failed"))
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
   })
 
   const roleMutation = useMutation({
     mutationFn: ({ id, newRole }: { id: string; newRole: string }) =>
       updateUserRole(id, newRole),
+    onMutate: async ({ id, newRole }) => {
+      await queryClient.cancelQueries({ queryKey: ["users"] })
+      const rollback = patchUserInCache(id, { role: newRole })
+      return { rollback }
+    },
     onSuccess: () => {
       toast.success(t("role_updated"))
-      queryClient.invalidateQueries({ queryKey: ["users"] })
+      setRoleChangeTarget(null)
     },
-    onError: () => toast.error(t("role_update_failed")),
+    onError: (_err, _vars, ctx) => {
+      ctx?.rollback?.()
+      toast.error(t("role_update_failed"))
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
   })
 
   const avatarMutation = useMutation({
@@ -169,7 +204,10 @@ export default function UsersPage() {
         return (
           <Select
             value={row.original.role}
-            onValueChange={(newRole) => roleMutation.mutate({ id: row.original.id, newRole })}
+            onValueChange={(newRole) => {
+              if (newRole === row.original.role) return
+              setRoleChangeTarget({ user: row.original, newRole })
+            }}
             disabled={isSelf || roleMutation.isPending}
           >
             <SelectTrigger className="h-7 text-xs w-32">
@@ -324,6 +362,29 @@ export default function UsersPage() {
         confirmLabel={t("ban_user")}
         isLoading={statusMutation.isPending}
         onConfirm={() => banTarget && statusMutation.mutate({ id: banTarget.id, newStatus: "banned" })}
+      />
+
+      <ConfirmDialog
+        open={!!roleChangeTarget}
+        onOpenChange={(v) => { if (!v) setRoleChangeTarget(null) }}
+        title={t("change_role")}
+        description={(() => {
+          if (!roleChangeTarget) return ""
+          const oldLabel = USER_ROLES.find((r) => r.value === roleChangeTarget.user.role)
+          const newLabel = USER_ROLES.find((r) => r.value === roleChangeTarget.newRole)
+          const oldRole = (lang === "ar" ? oldLabel?.labelAr : oldLabel?.label) ?? roleChangeTarget.user.role
+          const newRole = (lang === "ar" ? newLabel?.labelAr : newLabel?.label) ?? roleChangeTarget.newRole
+          return t("change_role_confirm")
+            .replace("{name}", roleChangeTarget.user.name)
+            .replace("{oldRole}", oldRole)
+            .replace("{newRole}", newRole)
+        })()}
+        confirmLabel={t("change_role")}
+        isLoading={roleMutation.isPending}
+        onConfirm={() =>
+          roleChangeTarget &&
+          roleMutation.mutate({ id: roleChangeTarget.user.id, newRole: roleChangeTarget.newRole })
+        }
       />
 
       <UserFormDialog open={createOpen} onOpenChange={setCreateOpen} />

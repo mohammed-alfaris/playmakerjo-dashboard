@@ -23,6 +23,21 @@ import { SPORTS, VENUE_STATUSES } from "@/lib/constants"
 import { formatCurrency } from "@/lib/formatters"
 import { useT } from "@/i18n/LanguageContext"
 
+function VenueThumbnail({ src, alt }: { src?: string; alt: string }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) {
+    return <div className="h-9 w-14 rounded-md bg-muted shrink-0" />
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-9 w-14 rounded-md object-cover shrink-0 bg-muted"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 export default function VenuesPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -91,19 +106,9 @@ export default function VenuesPage() {
       accessorKey: "name",
       header: t("name"),
       cell: ({ row }) => {
-        const img = row.original.images?.[0]
         return (
           <div className="flex items-center gap-3">
-            {img ? (
-              <img
-                src={img}
-                alt={row.original.name}
-                className="h-9 w-14 rounded-md object-cover shrink-0 bg-muted"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement?.insertAdjacentHTML('afterbegin', '<div class="h-9 w-14 rounded-md bg-muted shrink-0"></div>') }}
-              />
-            ) : (
-              <div className="h-9 w-14 rounded-md bg-muted shrink-0" />
-            )}
+            <VenueThumbnail src={row.original.images?.[0]} alt={row.original.name} />
             <Link
               to={`/venues/${row.original.id}`}
               className="font-medium hover:underline"

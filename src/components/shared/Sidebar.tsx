@@ -4,6 +4,7 @@ import {
   MapPin,
   Users,
   CalendarCheck,
+  CalendarClock,
   CreditCard,
   BarChart3,
   Bell,
@@ -32,6 +33,7 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
     items: [
       { href: "/",         labelKey: "nav_dashboard", icon: LayoutDashboard, roles: ["super_admin", "venue_owner"] },
       { href: "/venues",   labelKey: "nav_venues",    icon: MapPin,          roles: ["super_admin", "venue_owner"] },
+      { href: "/timeline", labelKey: "slot_timeline", icon: CalendarClock,   roles: ["super_admin", "venue_owner"] },
       { href: "/bookings", labelKey: "nav_bookings",  icon: CalendarCheck,   roles: ["super_admin", "venue_owner"] },
     ],
   },

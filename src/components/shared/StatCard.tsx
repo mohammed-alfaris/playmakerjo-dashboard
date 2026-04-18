@@ -10,6 +10,45 @@ interface StatCardProps {
   icon: React.ElementType
   color?: "blue" | "green" | "amber" | "purple" | "red"
   isLoading?: boolean
+  /** Series of recent values, oldest → newest. Renders a tiny inline sparkline when present. */
+  sparkline?: number[]
+}
+
+const SPARK_W = 72
+const SPARK_H = 24
+
+/**
+ * Inline SVG sparkline. Pure presentational — inherits `currentColor` from its container
+ * so it picks up the card's color token automatically.
+ */
+function Sparkline({ points, ariaLabel }: { points: number[]; ariaLabel: string }) {
+  if (points.length < 2) return null
+  const min = Math.min(...points)
+  const max = Math.max(...points)
+  const range = max - min || 1
+  const step = SPARK_W / (points.length - 1)
+  const path = points
+    .map((v, i) => {
+      const x = i * step
+      const y = SPARK_H - ((v - min) / range) * SPARK_H
+      return `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`
+    })
+    .join(" ")
+  // Closed area path for the fill underneath the line.
+  const area = `${path} L${SPARK_W} ${SPARK_H} L0 ${SPARK_H} Z`
+  return (
+    <svg
+      width={SPARK_W}
+      height={SPARK_H}
+      viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+      className="shrink-0 overflow-visible"
+      role="img"
+      aria-label={ariaLabel}
+    >
+      <path d={area} fill="currentColor" opacity={0.12} />
+      <path d={path} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
 const COLOR_MAP = {
@@ -20,9 +59,10 @@ const COLOR_MAP = {
   red:    { border: "border-l-red-500",    iconBg: "bg-red-100 dark:bg-red-950",      iconText: "text-red-600 dark:text-red-400",      grad: "from-red-50/60 dark:from-red-950/30" },
 }
 
-export function StatCard({ title, value, change, icon: Icon, color = "blue", isLoading }: StatCardProps) {
+export function StatCard({ title, value, change, icon: Icon, color = "blue", isLoading, sparkline }: StatCardProps) {
   const { border, iconBg, iconText, grad } = COLOR_MAP[color]
   const isPositive = (change ?? 0) >= 0
+  const hasSparkline = Array.isArray(sparkline) && sparkline.length >= 2 && sparkline.some((v) => v !== 0)
 
   if (isLoading) {
     return (
@@ -58,8 +98,15 @@ export function StatCard({ title, value, change, icon: Icon, color = "blue", isL
               </div>
             )}
           </div>
-          <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg shrink-0", iconBg)}>
-            <Icon className={cn("h-5 w-5", iconText)} />
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <div className={cn("flex h-10 w-10 items-center justify-center rounded-lg", iconBg)}>
+              <Icon className={cn("h-5 w-5", iconText)} />
+            </div>
+            {hasSparkline && (
+              <div className={iconText}>
+                <Sparkline points={sparkline!} ariaLabel={`${title} trend`} />
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

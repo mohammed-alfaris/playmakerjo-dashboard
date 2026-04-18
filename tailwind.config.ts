@@ -9,8 +9,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        display: ["Outfit", "sans-serif"],
+        display: ["Space Grotesk", "Outfit", "sans-serif"],
         body:    ["Inter", "sans-serif"],
+        mono:    ["JetBrains Mono", "IBM Plex Mono", "ui-monospace", "monospace"],
         arabic:  ["Cairo", "sans-serif"],
       },
       fontSize: {
@@ -24,11 +25,14 @@ const config: Config = {
         kinetic: "cubic-bezier(0.22, 1, 0.36, 1)",
       },
       boxShadow: {
-        ambient: "0px 20px 40px rgba(19, 27, 46, 0.06)",
-        "ambient-dark": "0px 20px 40px rgba(0, 0, 0, 0.3)",
+        ambient:       "0px 20px 40px rgba(19, 27, 46, 0.06)",
+        "ambient-dark":"0px 20px 40px rgba(0, 0, 0, 0.3)",
+        stadium:       "0 8px 24px -12px rgba(11,20,16,0.18)",
+        "stadium-sm":  "0 1px 0 rgba(11,20,16,0.04), 0 1px 2px rgba(11,20,16,0.04)",
       },
       backgroundImage: {
         "primary-gradient": "linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary-container)) 100%)",
+        "brand-gradient":   "linear-gradient(135deg, hsl(var(--brand)) 0%, hsl(var(--brand-2)) 100%)",
       },
       colors: {
         border: "hsl(var(--border))",
@@ -70,16 +74,61 @@ const config: Config = {
         brand: {
           DEFAULT:    "hsl(var(--brand))",
           foreground: "hsl(var(--brand-foreground))",
+          2:          "hsl(var(--brand-2))",
+          tint:       "hsl(var(--brand-tint))",
+          ink:        "hsl(var(--brand-ink))",
         },
-        /* Emerald Pitch layering — use these to separate sections WITHOUT borders */
+        /* Stadium Control Room extended palette */
+        ink: {
+          DEFAULT: "hsl(var(--ink))",
+          2:       "hsl(var(--ink-2))",
+          3:       "hsl(var(--ink-3))",
+        },
+        line: {
+          DEFAULT: "hsl(var(--line))",
+          strong:  "hsl(var(--line-strong))",
+        },
         surface: {
           DEFAULT:   "hsl(var(--surface))",
+          2:         "hsl(var(--surface-2))",
+          3:         "hsl(var(--surface-3))",
+          /* Back-compat aliases for old `bg-surface-raised` / `bg-surface-container-*` usages */
           low:       "hsl(var(--surface-container-low))",
           container: "hsl(var(--surface-container))",
           high:      "hsl(var(--surface-container-high))",
           lowest:    "hsl(var(--surface-container-lowest))",
-          /* Back-compat alias — old `bg-surface-raised` keeps working */
           raised:    "hsl(var(--surface-container-lowest))",
+        },
+        lime: {
+          DEFAULT: "hsl(var(--lime))",
+        },
+        amber: {
+          DEFAULT: "hsl(var(--amber))",
+          tint:    "hsl(var(--amber-tint))",
+          ink:     "hsl(var(--amber-ink))",
+        },
+        rose: {
+          DEFAULT: "hsl(var(--rose))",
+          tint:    "hsl(var(--rose-tint))",
+          ink:     "hsl(var(--rose-ink))",
+        },
+        indigo: {
+          DEFAULT: "hsl(var(--indigo))",
+          tint:    "hsl(var(--indigo-tint))",
+          ink:     "hsl(var(--indigo-ink))",
+        },
+        sky: {
+          DEFAULT: "hsl(var(--sky))",
+          tint:    "hsl(var(--sky-tint))",
+          ink:     "hsl(var(--sky-ink))",
+        },
+        violet: {
+          DEFAULT: "hsl(var(--violet))",
+          tint:    "hsl(var(--violet-tint))",
+          ink:     "hsl(var(--violet-ink))",
+        },
+        slate: {
+          ink: "hsl(var(--slate-ink))",
         },
         tertiary: "hsl(var(--tertiary))",
         "on-surface":         "hsl(var(--on-surface))",

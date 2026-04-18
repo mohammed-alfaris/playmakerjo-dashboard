@@ -1,5 +1,16 @@
 import api from "./axios"
 
+export interface SummarySparklines {
+  /** Last 14 days of gross revenue, oldest → newest. */
+  revenue: number[]
+  /** Last 14 days of platform-fee revenue, oldest → newest. Zeros for venue_owner. */
+  systemRevenue: number[]
+  /** Last 14 days of owner-payout revenue, oldest → newest. */
+  ownerRevenue: number[]
+  /** Last 14 days of booking counts (all statuses), oldest → newest. */
+  bookings: number[]
+}
+
 export interface SummaryData {
   totalRevenue: number
   ownerRevenue: number
@@ -12,6 +23,7 @@ export interface SummaryData {
   bookingsChange?: number
   venuesChange?: number
   usersChange?: number
+  sparklines?: SummarySparklines
 }
 
 export interface RevenueChartData {

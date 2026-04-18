@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,89 +6,138 @@
 
 @layer base {
   :root {
-    /* === Shadcn base — primary swapped to emerald per emerald_pitch === */
-    --background: 253 100% 99%;        /* #faf8ff surface */
-    --foreground: 223 41% 13%;         /* #131b2e on-surface, never #000 */
-    --card: 0 0% 100%;                 /* surface-container-lowest */
-    --card-foreground: 223 41% 13%;
+    /* === Stadium Control Room — Pitch Day === */
+    --background: 75 13% 96%;          /* #f6f7f4 warm off-white */
+    --foreground: 156 27% 6%;          /* #0b1410 warm near-black */
+    --card: 0 0% 100%;                 /* #ffffff */
+    --card-foreground: 156 27% 6%;
     --popover: 0 0% 100%;
-    --popover-foreground: 223 41% 13%;
+    --popover-foreground: 156 27% 6%;
     --primary: 148 80% 22%;            /* #0b6438 emerald */
     --primary-foreground: 0 0% 100%;
-    --secondary: 264 50% 96%;          /* #f2eefa surface-container-low */
-    --secondary-foreground: 223 41% 13%;
-    --muted: 263 35% 93%;              /* #ece7f5 surface-container */
-    --muted-foreground: 222 17% 34%;   /* #475064 on-surface-variant */
-    --accent: 264 50% 96%;
-    --accent-foreground: 223 41% 13%;
-    --destructive: 350 39% 40%;        /* #8c3d4a tertiary (negative trend) */
+    --secondary: 60 11% 92%;           /* #efefe9 surface-2 */
+    --secondary-foreground: 156 27% 6%;
+    --muted: 60 11% 92%;
+    --muted-foreground: 151 7% 44%;    /* #6a7872 ink-3 */
+    --accent: 60 11% 92%;
+    --accent-foreground: 156 27% 6%;
+    --destructive: 350 58% 46%;        /* #b8324b rose */
     --destructive-foreground: 0 0% 100%;
-    --border: 218 13% 84%;             /* #d0d4dc outline-variant */
-    --input: 218 13% 84%;
-    --ring: 148 80% 22%;               /* focus ring = primary */
-    --radius: 0.5rem;
+    --border: 68 9% 87%;               /* #dfe0d9 line */
+    --input: 68 9% 87%;
+    --ring: 148 80% 22%;
+    --radius: 0.625rem;                /* 10px — design's --radius */
 
-    /* === Emerald Pitch extended palette === */
-    --primary-container: 141 47% 34%;  /* #2e7d4f — gradient endpoint */
-    --primary-fixed: 142 34% 86%;      /* #cfe8d8 — tinted badge bg */
-    --on-primary-fixed: 148 80% 22%;   /* badge text on primary-fixed */
-    --tertiary: 350 39% 40%;           /* #8c3d4a */
-    --on-surface: 223 41% 13%;
-    --on-surface-variant: 222 17% 34%;
-    --outline-variant: 218 13% 84%;    /* use at 15% opacity as ghost border */
-
-    /* Surface layering (The "No-Line" rule — stack these instead of borders) */
-    --surface: 253 100% 99%;
-    --surface-container-low: 264 50% 96%;
-    --surface-container: 263 35% 93%;
-    --surface-container-high: 262 27% 91%;
-    --surface-container-lowest: 0 0% 100%;
-
-    /* Brand = primary alias (back-compat for pre-existing `bg-brand` usages) */
+    /* Stadium extended tokens */
+    --ink: 156 27% 6%;
+    --ink-2: 158 12% 26%;              /* #3a4a42 body */
+    --ink-3: 151 7% 44%;               /* #6a7872 muted */
+    --line: 68 9% 87%;
+    --line-strong: 68 7% 76%;          /* #c6c8be */
+    --surface: 0 0% 100%;
+    --surface-2: 60 11% 92%;
+    --surface-3: 68 13% 89%;
     --brand: 148 80% 22%;
+    --brand-2: 141 47% 34%;            /* #2e7d4f */
+    --brand-tint: 142 29% 89%;         /* #d9ebdf */
+    --brand-ink: 154 78% 11%;          /* #053220 */
     --brand-foreground: 0 0% 100%;
+    --lime: 83 86% 69%;                /* #b6f569 LIVE highlight */
+    --amber: 35 82% 47%;               /* #d98816 */
+    --amber-tint: 38 86% 89%;          /* #fbeacd */
+    --amber-ink: 35 92% 23%;           /* #6b4305 */
+    --rose: 350 58% 46%;               /* #b8324b */
+    --rose-tint: 350 62% 91%;          /* #f7d9df */
+    --rose-ink: 350 62% 22%;           /* #5b1622 */
+    --indigo: 233 47% 43%;             /* #3b4ba3 */
+    --indigo-tint: 227 60% 91%;        /* #dde1f5 */
+    --indigo-ink: 230 52% 24%;         /* #1d275d */
+    --sky: 199 89% 42%;                /* #0c89ce */
+    --sky-tint: 202 94% 91%;           /* #d6eefd */
+    --sky-ink: 202 88% 22%;            /* #0a4872 */
+    --violet: 262 60% 50%;             /* #8040cd */
+    --violet-tint: 264 80% 93%;        /* #e8ddfa */
+    --violet-ink: 262 70% 28%;         /* #3a187b */
+    --slate-ink: 215 16% 47%;          /* #64748b muted for cancelled */
+
+    /* Back-compat aliases for old `bg-surface-*` usages */
+    --surface-container-low: 60 11% 92%;
+    --surface-container: 68 13% 89%;
+    --surface-container-high: 68 13% 85%;
+    --surface-container-lowest: 0 0% 100%;
+    --primary-container: 141 47% 34%;
+    --primary-fixed: 142 29% 89%;
+    --on-primary-fixed: 154 78% 11%;
+    --tertiary: 350 58% 46%;
+    --on-surface: 156 27% 6%;
+    --on-surface-variant: 158 12% 26%;
+    --outline-variant: 68 9% 87%;
   }
 
   .dark {
-    /* === Dark mode — surfaces flip to deep slate, primary stays emerald === */
-    --background: 223 41% 10%;         /* deeper than #131b2e for body bg */
-    --foreground: 0 0% 98%;
-    --card: 223 37% 14%;               /* surface-container-lowest dark */
-    --card-foreground: 0 0% 98%;
-    --popover: 223 37% 14%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 141 47% 42%;            /* lighter emerald pops on dark bg */
+    /* === Stadium Control Room — Pitch Night === */
+    --background: 156 22% 5%;          /* #0a0f0d */
+    --foreground: 120 10% 94%;         /* #eef2ee */
+    --card: 156 15% 8%;                /* #121815 */
+    --card-foreground: 120 10% 94%;
+    --popover: 156 15% 8%;
+    --popover-foreground: 120 10% 94%;
+    --primary: 144 50% 49%;            /* #3fba74 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 223 33% 18%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 223 33% 18%;
-    --muted-foreground: 222 14% 67%;
-    --accent: 223 33% 18%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 350 55% 55%;
+    --secondary: 156 13% 11%;          /* #171f1b */
+    --secondary-foreground: 120 10% 94%;
+    --muted: 156 13% 11%;
+    --muted-foreground: 150 5% 52%;    /* #7e8b84 */
+    --accent: 156 13% 11%;
+    --accent-foreground: 120 10% 94%;
+    --destructive: 350 75% 66%;        /* #e96a81 */
     --destructive-foreground: 0 0% 100%;
-    --border: 223 33% 22%;
-    --input: 223 33% 22%;
-    --ring: 141 47% 42%;
+    --border: 145 8% 16%;              /* #232b27 */
+    --input: 145 8% 16%;
+    --ring: 144 50% 49%;
 
-    /* Emerald Pitch extended palette (dark) */
-    --primary-container: 141 58% 52%;
-    --primary-fixed: 148 30% 22%;      /* darker tint for badge bg */
-    --on-primary-fixed: 142 34% 86%;   /* light badge text */
-    --tertiary: 350 55% 60%;
-    --on-surface: 0 0% 98%;
-    --on-surface-variant: 222 14% 67%;
-    --outline-variant: 223 33% 30%;
-
-    /* Surface layering */
-    --surface: 223 41% 10%;
-    --surface-container-low: 223 37% 14%;
-    --surface-container: 223 35% 17%;
-    --surface-container-high: 223 33% 20%;
-    --surface-container-lowest: 224 37% 16%;   /* #1a2238 surface-bright for "active" states */
-
-    --brand: 141 47% 42%;
+    --ink: 120 10% 94%;
+    --ink-2: 140 7% 74%;               /* #b7c2bc */
+    --ink-3: 150 5% 52%;
+    --line: 145 8% 16%;
+    --line-strong: 150 9% 20%;         /* #2e3832 */
+    --surface: 156 15% 8%;
+    --surface-2: 156 13% 11%;
+    --surface-3: 156 15% 14%;          /* #1e2824 */
+    --brand: 144 50% 49%;
+    --brand-2: 140 50% 62%;            /* #6ad194 */
+    --brand-tint: 147 38% 14%;         /* #163021 */
+    --brand-ink: 142 67% 83%;          /* #b6f2cd */
     --brand-foreground: 0 0% 100%;
+    --lime: 83 86% 69%;
+    --amber: 36 85% 62%;                /* #f0b14a */
+    --amber-tint: 34 47% 16%;           /* #3a2c15 */
+    --amber-ink: 36 85% 62%;
+    --rose: 350 75% 66%;
+    --rose-tint: 350 36% 17%;           /* #3a1b22 */
+    --rose-ink: 350 75% 66%;
+    --indigo: 230 66% 73%;              /* #8a98e8 */
+    --indigo-tint: 233 38% 18%;         /* #1c2040 */
+    --indigo-ink: 230 66% 73%;
+    --sky: 199 85% 65%;                 /* #5fb5ea */
+    --sky-tint: 201 40% 16%;            /* #192a3a */
+    --sky-ink: 199 85% 65%;
+    --violet: 262 70% 72%;               /* #b08deb */
+    --violet-tint: 263 30% 19%;          /* #272142 */
+    --violet-ink: 262 70% 72%;
+    --slate-ink: 215 20% 65%;            /* #94a3b8 */
+
+    --surface-container-low: 156 13% 11%;
+    --surface-container: 156 15% 14%;
+    --surface-container-high: 156 15% 18%;
+    --surface-container-lowest: 156 15% 8%;
+    --primary-container: 140 50% 62%;
+    --primary-fixed: 147 38% 14%;
+    --on-primary-fixed: 142 67% 83%;
+    --tertiary: 350 75% 66%;
+    --on-surface: 120 10% 94%;
+    --on-surface-variant: 140 7% 74%;
+    --outline-variant: 145 8% 16%;
   }
 }
 
@@ -96,26 +145,105 @@
   * {
     @apply border-border;
   }
+  html, body, #root { height: 100%; }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', sans-serif;
-    font-feature-settings: "cv11", "ss01";  /* Inter: better numerals */
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01", "tnum";
+    -webkit-font-smoothing: antialiased;
   }
   [dir="rtl"] body {
     font-family: 'Cairo', sans-serif;
   }
-  /* Align Cairo's x-height with Inter per DESIGN.md §6 */
   [dir="rtl"] body,
   [dir="rtl"] * {
     line-height: 1.65;
   }
-  /* Disallow pure black text — enforce on-surface color */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Space Grotesk', 'Outfit', system-ui, sans-serif;
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
   }
   [dir="rtl"] h1, [dir="rtl"] h2, [dir="rtl"] h3, [dir="rtl"] h4, [dir="rtl"] h5, [dir="rtl"] h6 {
     font-family: 'Cairo', sans-serif;
   }
+  :focus-visible {
+    outline: 2px solid hsl(var(--brand));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb {
+    background: hsl(var(--line-strong));
+    border-radius: 20px;
+    border: 2px solid hsl(var(--background));
+  }
+  *::-webkit-scrollbar-track { background: transparent; }
+}
+
+@layer utilities {
+  /* Typography helpers from Stadium Control Room */
+  .display { font-family: 'Space Grotesk', 'Outfit', system-ui, sans-serif; letter-spacing: -0.02em; }
+  .font-display { font-family: 'Space Grotesk', 'Outfit', system-ui, sans-serif; }
+  .font-mono { font-family: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+  /* Pitch grid background watermark for hero cards */
+  .pitch-bg {
+    background-image:
+      linear-gradient(hsl(var(--line)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--line)) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: -1px -1px;
+  }
+
+  /* Dashed field hairline */
+  .hair { border-top: 1px dashed hsl(var(--line-strong)); }
+  .hair-v { border-inline-start: 1px dashed hsl(var(--line-strong)); }
+
+  /* Chip — status pills */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .chip.dot::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    display: inline-block;
+  }
+  .chip-brand  { background: hsl(var(--brand-tint));  color: hsl(var(--brand-ink)); }
+  .chip-amber  { background: hsl(var(--amber-tint));  color: hsl(var(--amber-ink)); }
+  .chip-rose   { background: hsl(var(--rose-tint));   color: hsl(var(--rose-ink)); }
+  .chip-indigo { background: hsl(var(--indigo-tint)); color: hsl(var(--indigo-ink)); }
+  .chip-ghost  { background: hsl(var(--surface-2));   color: hsl(var(--ink-2)); }
+
+  /* Live pulse dot */
+  @keyframes pm-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.5; transform: scale(1.15); }
+  }
+  .pm-pulse { animation: pm-pulse 1.6s ease-in-out infinite; }
+
+  /* Skeleton shimmer */
+  .shim { position: relative; overflow: hidden; background: hsl(var(--surface-2)); border-radius: 6px; }
+  .shim::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.5), transparent);
+    transform: translateX(-100%);
+    animation: pm-shim 1.6s ease-in-out infinite;
+  }
+  .dark .shim::after {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent);
+  }
+  @keyframes pm-shim { to { transform: translateX(100%); } }
+
+  [dir="rtl"] .rtl-flip { transform: scaleX(-1); }
 }
