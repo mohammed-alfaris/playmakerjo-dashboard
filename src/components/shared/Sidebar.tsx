@@ -10,6 +10,7 @@ import {
   BarChart3,
   Bell,
   Star,
+  Inbox,
   Settings as SettingsIcon,
   ChevronLeft,
   ChevronRight,
@@ -44,6 +45,7 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
     labelKey: "nav_management",
     items: [
       { href: "/users",         labelKey: "nav_users",         icon: Users,       roles: ["super_admin"] },
+      { href: "/leads",         labelKey: "nav_leads",         icon: Inbox,       roles: ["super_admin"] },
       { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  roles: ["super_admin"] },
       { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,   roles: ["super_admin", "venue_owner"] },
       { href: "/reviews",       labelKey: "reviews",           icon: Star,        roles: ["super_admin"] },

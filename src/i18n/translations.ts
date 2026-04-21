@@ -423,6 +423,16 @@ export const translations = {
     all_changes_saved: "All changes saved.",
     settings_saved: "Settings saved",
     settings_save_failed: "Failed to save settings",
+    // Leads
+    nav_leads: "Leads",
+    leads: "Leads",
+    leads_subtitle: "Interested players and venues from the website",
+    leads_players_tab: "Players",
+    leads_venues_tab: "Venues",
+    leads_contact: "Contact",
+    leads_venue_name: "Venue",
+    leads_no_players: "No player signups yet",
+    leads_no_venues: "No venue signups yet",
   },
   ar: {
     // Nav
@@ -846,6 +856,16 @@ export const translations = {
     all_changes_saved: "تم حفظ جميع التغييرات.",
     settings_saved: "تم حفظ الإعدادات",
     settings_save_failed: "تعذَّر حفظ الإعدادات",
+    // Leads
+    nav_leads: "المهتمون",
+    leads: "المهتمون",
+    leads_subtitle: "اللاعبون وأصحاب الملاعب الذين سجّلوا اهتمامهم من الموقع",
+    leads_players_tab: "اللاعبون",
+    leads_venues_tab: "الملاعب",
+    leads_contact: "جهة الاتصال",
+    leads_venue_name: "الملعب",
+    leads_no_players: "لا يوجد اهتمام من لاعبين بعد",
+    leads_no_venues: "لا يوجد اهتمام من ملاعب بعد",
   },
 } as const
 
