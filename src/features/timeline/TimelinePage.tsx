@@ -366,6 +366,9 @@ export default function TimelinePage() {
   const startHour = firstRow?.startHour ?? 0
   const endHour = firstRow?.endHour ?? 0
   const hours = Array.from({ length: Math.max(0, endHour - startHour) }, (_, i) => startHour + i)
+  // One extra trailing label shows the closing-time boundary (e.g. 03:00 when
+  // hours are 17:00–03:00). No cell sits beneath it — just a marker.
+  const boundaryLabels = hours.length > 0 ? [...hours, endHour] : []
   const isClosed = hours.length === 0
 
   const locale = lang === "ar" ? "ar-JO" : "en-GB"
@@ -545,22 +548,30 @@ export default function TimelinePage() {
             <div
               className="grid min-w-[1000px] gap-1"
               style={{
-                // Two 30-min columns per hour
-                gridTemplateColumns: `repeat(${hours.length * 2}, minmax(34px, 1fr))`,
+                // Two 30-min columns per hour, plus a narrow trailing column
+                // that only holds the closing-time boundary label.
+                gridTemplateColumns: `repeat(${hours.length * 2}, minmax(34px, 1fr)) 44px`,
               }}
             >
-              {/* Hour header row — each label spans 2 slot columns.
+              {/* Hour header row — each label spans 2 slot columns, except
+                  the final closing-time boundary which spans 1 narrow col.
                   Hours past 24 (overnight sessions) are rendered as their
                   wall-clock equivalent (25 → 01, 26 → 02, …). */}
-              {hours.map((h) => (
-                <div
-                  key={h}
-                  className="mono pb-2 text-center text-[10px] font-semibold text-ink-3"
-                  style={{ gridColumn: "span 2" }}
-                >
-                  {String(h % 24).padStart(2, "0")}:00
-                </div>
-              ))}
+              {boundaryLabels.map((h, i) => {
+                const isClose = i === boundaryLabels.length - 1
+                return (
+                  <div
+                    key={`hdr-${i}`}
+                    className={cn(
+                      "mono pb-2 text-[10px] font-semibold text-ink-3",
+                      isClose ? "px-1 text-start" : "text-center"
+                    )}
+                    style={{ gridColumn: isClose ? "span 1" : "span 2" }}
+                  >
+                    {String(h % 24).padStart(2, "0")}:00
+                  </div>
+                )
+              })}
 
               {/* One row per court */}
               {courtRows.map((row, courtIdx) => (
@@ -661,6 +672,8 @@ function CourtRowCells({
           />
         )
       })}
+      {/* Spacer for the closing-time column at the end of each court row */}
+      <div />
     </>
   )
 }

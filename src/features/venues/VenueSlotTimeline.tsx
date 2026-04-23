@@ -232,6 +232,9 @@ export function VenueSlotTimeline({
   )
 
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
+  // Extra trailing label to show the closing-time boundary (e.g. 03:00 when
+  // hours are 17:00–03:00). No cell sits beneath it — it's just a marker.
+  const boundaryLabels = [...hours, endHour]
   const isClosed = cells.length === 0
   const canManage = isAdmin || isOwner
   const canSeeNames = isAdmin || isOwner
@@ -395,15 +398,20 @@ export function VenueSlotTimeline({
             <div
               className="grid min-w-[900px] gap-1"
               style={{
-                gridTemplateColumns: `100px repeat(${hours.length}, minmax(56px, 1fr))`,
+                // N hour columns for the cells, plus a narrow fixed-width
+                // trailing column that only holds the closing-time label.
+                gridTemplateColumns: `100px repeat(${hours.length}, minmax(56px, 1fr)) 44px`,
               }}
             >
-              {/* Header row: empty + hour labels */}
+              {/* Header row: empty + hour labels + closing boundary label */}
               <div />
-              {hours.map((h) => (
+              {boundaryLabels.map((h, i) => (
                 <div
-                  key={h}
-                  className="mono pb-2 text-center text-[10px] font-semibold text-ink-3"
+                  key={`hdr-${i}`}
+                  className={cn(
+                    "mono pb-2 text-[10px] font-semibold text-ink-3",
+                    i < hours.length ? "text-center" : "px-1 text-start"
+                  )}
                 >
                   {String(h % 24).padStart(2, "0")}:00
                 </div>
@@ -435,6 +443,8 @@ export function VenueSlotTimeline({
                   />
                 )
               })}
+              {/* Closing-time column has no cell — just the boundary label */}
+              <div />
             </div>
 
             {/* Now indicator overlay */}
@@ -680,17 +690,23 @@ function NowLine({
   const isOvernight = endMin > 24 * 60
   const nowMin = isOvernight && rawNowMin < startMin ? rawNowMin + 24 * 60 : rawNowMin
   if (nowMin < startMin || nowMin > endMin) return null
-  // The grid starts with a 100px first column (court label), rest is hours.
-  // Position line relative to the hours area.
+  // The grid starts with a 100px first column (court label), then N hour
+  // cells, then a 44px closing-time label column. Position the now-line
+  // relative to the hours area (between the label col and the close col).
   const labelColPx = 100
+  const closeColPx = 44
+  const gapPx = 4
   const pct = ((nowMin - startMin) / (endMin - startMin)) * 100
   return (
     <div
       className="pointer-events-none relative -mt-[44px] h-11"
       aria-hidden
-      style={{ paddingInlineStart: labelColPx + 4 }}
+      style={{ paddingInlineStart: labelColPx + gapPx }}
     >
-      <div className="relative h-full w-[calc(100%-100px-4px)]">
+      <div
+        className="relative h-full"
+        style={{ width: `calc(100% - ${labelColPx + gapPx + closeColPx + gapPx}px)` }}
+      >
         <div
           className="absolute -top-1 bottom-0 w-[2px] bg-rose"
           style={{ insetInlineStart: `${pct}%` }}
