@@ -125,7 +125,11 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
             day,
             open:   entry?.open  || "09:00",
             close:  entry?.close || "22:00",
-            closed: entry ? !!entry.closed : !venue ? false : true,
+            // Only mark closed when the venue explicitly saved { closed: true }
+            // for this day. A missing entry defaults to open so the time inputs
+            // are editable (otherwise the row is disabled and users think the
+            // form is broken).
+            closed: !!entry?.closed,
           }
         }
         return { day, open: entry.open, close: entry.close, closed: false }
@@ -520,14 +524,15 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
                           <button
                             type="button"
                             onClick={() => field.onChange(!field.value)}
+                            title={field.value ? t("closed") : t("open")}
                             className={cn(
                               "h-9 px-3 rounded-md border text-xs font-medium transition-colors whitespace-nowrap",
                               field.value
-                                ? "bg-muted text-muted-foreground border-border"
-                                : "bg-background hover:bg-accent border-input"
+                                ? "bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20"
+                                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
                             )}
                           >
-                            {t("closed")}
+                            {field.value ? t("closed") : t("open")}
                           </button>
                         )}
                       />
