@@ -26,9 +26,42 @@ import { useRole } from "@/hooks/useRole"
 import { SPORTS } from "@/lib/constants"
 import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/LanguageContext"
+import type { TranslationKey } from "@/i18n/translations"
+import type { DayOfWeek, OperatingHours } from "@/lib/types"
+
+const DAYS_OF_WEEK: DayOfWeek[] = [
+  "monday", "tuesday", "wednesday", "thursday",
+  "friday", "saturday", "sunday",
+]
+
+/** Parses "HH:mm" to minutes-since-midnight. */
+function parseHHMM(value: string): number {
+  const [h, m] = value.split(":").map((n) => parseInt(n, 10))
+  return (h || 0) * 60 + (m || 0)
+}
 
 const MAX_IMAGES = 5
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
+
+const dayHoursSchema = z.object({
+  day:    z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]),
+  open:   z.string(),
+  close:  z.string(),
+  closed: z.boolean(),
+}).superRefine((v, ctx) => {
+  if (v.closed) return
+  if (!TIME_REGEX.test(v.open)) {
+    ctx.addIssue({ code: "custom", path: ["open"], message: "Use HH:mm format" })
+  }
+  if (!TIME_REGEX.test(v.close)) {
+    ctx.addIssue({ code: "custom", path: ["close"], message: "Use HH:mm format" })
+  }
+  if (TIME_REGEX.test(v.open) && TIME_REGEX.test(v.close) && v.open === v.close) {
+    ctx.addIssue({ code: "custom", path: ["close"], message: "open_close_must_differ" })
+  }
+})
 
 const schema = z.object({
   name:         z.string().min(2, "Name must be at least 2 characters"),
@@ -42,6 +75,7 @@ const schema = z.object({
   longitude:    z.string().optional(),
   cliqAlias:    z.string().optional(),
   depositPercentage: z.number().optional(),
+  hours:        z.array(dayHoursSchema).length(7),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -75,12 +109,27 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
     handleSubmit,
     control,
     reset,
+    watch,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<FormValues>({ resolver: zodResolver(schema) })
 
   useEffect(() => {
     if (open) {
       setImages(venue?.images ?? [])
+      const hoursDefault = DAYS_OF_WEEK.map<FormValues["hours"][number]>((day) => {
+        const entry = venue?.operatingHours?.[day]
+        if (!entry || entry.closed) {
+          return {
+            day,
+            open:   entry?.open  || "09:00",
+            close:  entry?.close || "22:00",
+            closed: entry ? !!entry.closed : !venue ? false : true,
+          }
+        }
+        return { day, open: entry.open, close: entry.close, closed: false }
+      })
       reset(
         venue
           ? {
@@ -95,11 +144,13 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
               longitude:    venue.longitude?.toString() ?? "",
               cliqAlias:    venue.cliqAlias ?? "",
               depositPercentage: venue.depositPercentage ?? 20,
+              hours: hoursDefault,
             }
           : {
               name: "", ownerId: isOwner && userId ? userId : "", city: "", address: "",
               sports: [], pricePerHour: 0, description: "",
               latitude: "", longitude: "", cliqAlias: "", depositPercentage: 20,
+              hours: hoursDefault,
             }
       )
     }
@@ -160,6 +211,12 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {
       const ownerName = owners.find((o) => o.id === values.ownerId)?.name ?? ""
+      const operatingHours: OperatingHours = {}
+      for (const row of values.hours) {
+        operatingHours[row.day] = row.closed
+          ? { open: "", close: "", closed: true }
+          : { open: row.open, close: row.close }
+      }
       const payload = {
         name:         values.name,
         owner:        { id: values.ownerId, name: ownerName },
@@ -173,6 +230,7 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
         longitude: values.longitude ? parseFloat(values.longitude) : undefined,
         cliqAlias: values.cliqAlias || undefined,
         depositPercentage: values.depositPercentage,
+        operatingHours,
       }
       return isEdit ? updateVenue(venue!.id, payload) : createVenue(payload)
     },
@@ -407,6 +465,94 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
                 </div>
               </>
             )}
+          </div>
+
+          {/* Working Hours */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label>{t("working_hours")}</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => {
+                  const mon = getValues("hours.0")
+                  if (!mon) return
+                  for (let i = 1; i < 7; i++) {
+                    setValue(`hours.${i}.open`,   mon.open,   { shouldDirty: true })
+                    setValue(`hours.${i}.close`,  mon.close,  { shouldDirty: true })
+                    setValue(`hours.${i}.closed`, mon.closed, { shouldDirty: true })
+                  }
+                }}
+              >
+                {t("apply_to_all_days")}
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              {DAYS_OF_WEEK.map((day, idx) => {
+                const row = watch(`hours.${idx}`)
+                const overnight =
+                  row && !row.closed &&
+                  TIME_REGEX.test(row.open) && TIME_REGEX.test(row.close) &&
+                  parseHHMM(row.close) <= parseHHMM(row.open)
+                const rowErr = errors.hours?.[idx]
+                return (
+                  <div key={day} className="space-y-1">
+                    <div className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-2">
+                      <span className="text-sm font-medium">{t(day as TranslationKey)}</span>
+                      <Input
+                        type="time"
+                        disabled={row?.closed}
+                        className={cn("h-9", row?.closed && "opacity-50")}
+                        {...register(`hours.${idx}.open`)}
+                      />
+                      <Input
+                        type="time"
+                        disabled={row?.closed}
+                        className={cn("h-9", row?.closed && "opacity-50")}
+                        {...register(`hours.${idx}.close`)}
+                      />
+                      <Controller
+                        name={`hours.${idx}.closed`}
+                        control={control}
+                        render={({ field }) => (
+                          <button
+                            type="button"
+                            onClick={() => field.onChange(!field.value)}
+                            className={cn(
+                              "h-9 px-3 rounded-md border text-xs font-medium transition-colors whitespace-nowrap",
+                              field.value
+                                ? "bg-muted text-muted-foreground border-border"
+                                : "bg-background hover:bg-accent border-input"
+                            )}
+                          >
+                            {t("closed")}
+                          </button>
+                        )}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pl-[88px] min-h-[14px]">
+                      {overnight && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">
+                          · {t("hours_next_day")}
+                        </Badge>
+                      )}
+                      {rowErr?.close?.message && (
+                        <p className="text-xs text-destructive">
+                          {rowErr.close.message === "open_close_must_differ"
+                            ? t("open_close_must_differ")
+                            : rowErr.close.message}
+                        </p>
+                      )}
+                      {rowErr?.open?.message && !rowErr?.close?.message && (
+                        <p className="text-xs text-destructive">{rowErr.open.message}</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           {/* Location */}

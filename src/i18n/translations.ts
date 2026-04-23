@@ -433,6 +433,21 @@ export const translations = {
     leads_venue_name: "Venue",
     leads_no_players: "No player signups yet",
     leads_no_venues: "No venue signups yet",
+    // Working hours
+    working_hours: "Working Hours",
+    opens_at: "Opens at",
+    closes_at: "Closes at",
+    closed: "Closed",
+    apply_to_all_days: "Apply Monday to all days",
+    hours_next_day: "next day",
+    open_close_must_differ: "Open and close times must differ",
+    monday: "Monday",
+    tuesday: "Tuesday",
+    wednesday: "Wednesday",
+    thursday: "Thursday",
+    friday: "Friday",
+    saturday: "Saturday",
+    sunday: "Sunday",
   },
   ar: {
     // Nav
@@ -866,6 +881,21 @@ export const translations = {
     leads_venue_name: "الملعب",
     leads_no_players: "لا يوجد اهتمام من لاعبين بعد",
     leads_no_venues: "لا يوجد اهتمام من ملاعب بعد",
+    // Working hours
+    working_hours: "ساعات العمل",
+    opens_at: "يفتح في",
+    closes_at: "يغلق في",
+    closed: "مغلق",
+    apply_to_all_days: "تطبيق الإثنين على كل الأيام",
+    hours_next_day: "اليوم التالي",
+    open_close_must_differ: "يجب أن يختلف وقت الفتح عن وقت الإغلاق",
+    monday: "الإثنين",
+    tuesday: "الثلاثاء",
+    wednesday: "الأربعاء",
+    thursday: "الخميس",
+    friday: "الجمعة",
+    saturday: "السبت",
+    sunday: "الأحد",
   },
 } as const
 
