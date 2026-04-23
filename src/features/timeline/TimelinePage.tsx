@@ -90,16 +90,20 @@ function parseTime(hhmm: string | undefined): number | null {
 }
 
 function formatMinutes(mins: number): string {
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
+  // Normalize into 0-24h for display; the timeline uses an extended frame
+  // (up to ~48h) for overnight sessions, so a raw minute value may exceed 1440.
+  const normalized = ((mins % (24 * 60)) + 24 * 60) % (24 * 60)
+  const h = Math.floor(normalized / 60)
+  const m = normalized % 60
   const suffix = h >= 12 ? "PM" : "AM"
   const h12 = ((h + 11) % 12) + 1
   return `${h12}:${m.toString().padStart(2, "0")} ${suffix}`
 }
 
 function formatHour(mins: number): string {
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
+  const normalized = ((mins % (24 * 60)) + 24 * 60) % (24 * 60)
+  const h = Math.floor(normalized / 60)
+  const m = normalized % 60
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
 }
 
@@ -156,11 +160,20 @@ function buildCourtRow({
   const start = parseTime(dh.open)
   const end = parseTime(dh.close)
   if (start == null || end == null) return { cells: [], startHour: 0, endHour: 0 }
+  // Overnight: when close <= open the venue crosses midnight. We work in an
+  // extended frame where minutes can exceed 24h — the loop, the header, and
+  // the booking overlap check all use this frame; display helpers mod by 24h.
+  const isOvernight = end <= start
   const startHour = Math.floor(start / 60)
-  const endCapped = end <= start ? 24 * 60 : end
-  const endHour = Math.ceil(endCapped / 60)
+  const endExtended = isOvernight ? end + 24 * 60 : end
+  const endHour = Math.ceil(endExtended / 60)
 
-  const nowMin = isToday ? now.getHours() * 60 + now.getMinutes() : -1
+  // Normalize "now" into the same extended frame if the user is viewing a
+  // day whose overnight session wraps past midnight and the current clock
+  // time is already past midnight but inside the session.
+  const rawNowMin = now.getHours() * 60 + now.getMinutes()
+  const nowInFrame = isOvernight && rawNowMin < start ? rawNowMin + 24 * 60 : rawNowMin
+  const nowMin = isToday ? nowInFrame : -1
   const cells: HourCell[] = []
 
   // Iterate every SLOT_MIN bucket between startHour and endHour
@@ -174,8 +187,12 @@ function buildCourtRow({
 
     let booking: Booking | undefined
     for (const b of bookings) {
-      const bStart = parseTime(b.startTime)
+      let bStart = parseTime(b.startTime)
       if (bStart == null) continue
+      // Bookings that start after midnight on an overnight session are
+      // stored with a small start time (e.g. 01:00). Shift them into the
+      // extended frame so they overlap the late slots correctly.
+      if (isOvernight && bStart < start) bStart += 24 * 60
       const bEnd = bStart + (b.duration ?? 0)
       if (slotStart < bEnd && slotEnd > bStart) {
         booking = b
@@ -532,14 +549,16 @@ export default function TimelinePage() {
                 gridTemplateColumns: `repeat(${hours.length * 2}, minmax(34px, 1fr))`,
               }}
             >
-              {/* Hour header row — each label spans 2 slot columns */}
+              {/* Hour header row — each label spans 2 slot columns.
+                  Hours past 24 (overnight sessions) are rendered as their
+                  wall-clock equivalent (25 → 01, 26 → 02, …). */}
               {hours.map((h) => (
                 <div
                   key={h}
                   className="mono pb-2 text-center text-[10px] font-semibold text-ink-3"
                   style={{ gridColumn: "span 2" }}
                 >
-                  {String(h).padStart(2, "0")}:00
+                  {String(h % 24).padStart(2, "0")}:00
                 </div>
               ))}
 
@@ -1098,8 +1117,11 @@ function AssignBookingDialog({
 
   const create = useMutation({
     mutationFn: async () => {
-      const startHH = String(Math.floor(startMin / 60)).padStart(2, "0")
-      const startMM = String(startMin % 60).padStart(2, "0")
+      // Overnight sessions produce extended-frame start values (>= 1440);
+      // normalize to wall-clock before serializing.
+      const normalizedStart = ((startMin % (24 * 60)) + 24 * 60) % (24 * 60)
+      const startHH = String(Math.floor(normalizedStart / 60)).padStart(2, "0")
+      const startMM = String(normalizedStart % 60).padStart(2, "0")
       const notePrefix = `[MANUAL] [Court ${courtIndex + 1}]`
       const walkIn = playerName ? ` Walk-in: ${playerName}.` : ""
       const extra = notes ? ` ${notes}` : ""

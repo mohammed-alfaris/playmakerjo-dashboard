@@ -78,14 +78,18 @@ function parseTime(hhmm: string | undefined): number | null {
 }
 
 function formatHour(mins: number): string {
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
+  // Normalize into 0-24h — overnight sessions use an extended frame that may
+  // exceed 1440 minutes; display values should still read as 00:00, 01:00, …
+  const normalized = ((mins % (24 * 60)) + 24 * 60) % (24 * 60)
+  const h = Math.floor(normalized / 60)
+  const m = normalized % 60
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
 }
 
 function formatMinutes(mins: number): string {
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
+  const normalized = ((mins % (24 * 60)) + 24 * 60) % (24 * 60)
+  const h = Math.floor(normalized / 60)
+  const m = normalized % 60
   const suffix = h >= 12 ? "PM" : "AM"
   const h12 = ((h + 11) % 12) + 1
   return `${h12}:${m.toString().padStart(2, "0")} ${suffix}`
@@ -128,11 +132,16 @@ function buildHourCells({
   const start = parseTime(dh.open)
   const end = parseTime(dh.close)
   if (start == null || end == null) return { cells: [], startHour: 0, endHour: 0 }
+  // Overnight: close <= open means the venue crosses midnight. Work in an
+  // extended frame (minutes may exceed 1440); display helpers mod by 24h.
+  const isOvernight = end <= start
   const startHour = Math.floor(start / 60)
-  const endCapped = end <= start ? 24 * 60 : end
-  const endHour = Math.ceil(endCapped / 60)
+  const endExtended = isOvernight ? end + 24 * 60 : end
+  const endHour = Math.ceil(endExtended / 60)
 
-  const nowMin = isToday ? now.getHours() * 60 + now.getMinutes() : -1
+  const rawNowMin = now.getHours() * 60 + now.getMinutes()
+  const nowInFrame = isOvernight && rawNowMin < start ? rawNowMin + 24 * 60 : rawNowMin
+  const nowMin = isToday ? nowInFrame : -1
   const cells: HourCell[] = []
 
   for (let h = startHour; h < endHour; h++) {
@@ -145,8 +154,11 @@ function buildHourCells({
     let booking: Booking | undefined
     let pending = false
     for (const b of bookings) {
-      const bStart = parseTime(b.startTime)
+      let bStart = parseTime(b.startTime)
       if (bStart == null) continue
+      // Bookings that start after midnight on an overnight session are stored
+      // with a small start time (e.g. 01:00). Shift into the extended frame.
+      if (isOvernight && bStart < start) bStart += 24 * 60
       const bEnd = bStart + (b.duration ?? 0)
       if (hourStart < bEnd && hourEnd > bStart) {
         booking = b
@@ -393,7 +405,7 @@ export function VenueSlotTimeline({
                   key={h}
                   className="mono pb-2 text-center text-[10px] font-semibold text-ink-3"
                 >
-                  {String(h).padStart(2, "0")}:00
+                  {String(h % 24).padStart(2, "0")}:00
                 </div>
               ))}
 
@@ -554,7 +566,8 @@ function TimelineCell({
   t: (key: TranslationKey) => string
 }) {
   const span = cell.span ?? 1
-  const h = Math.floor(cell.startMin / 60)
+  // Extended frame values (e.g. 25) render as wall-clock hours (01)
+  const h = Math.floor(cell.startMin / 60) % 24
   const hourLabel = `${String(h).padStart(2, "0")}:00`
 
   if (cell.state === "booked" && cell.booking) {
@@ -565,7 +578,7 @@ function TimelineCell({
         ? "bg-amber-tint text-amber-ink"
         : "bg-primary text-primary-foreground"
     )
-    const endHour = (cell.startMin + span * 60) / 60
+    const endHour = ((cell.startMin + span * 60) / 60) % 24
     return (
       <div style={{ gridColumn: `span ${span}` }}>
         <BookingPopover
@@ -660,9 +673,12 @@ function NowLine({
   endHour: number
   now: Date
 }) {
-  const nowMin = now.getHours() * 60 + now.getMinutes()
+  const rawNowMin = now.getHours() * 60 + now.getMinutes()
   const startMin = startHour * 60
   const endMin = endHour * 60
+  // When the grid spans past midnight, lift nowMin into the extended frame.
+  const isOvernight = endMin > 24 * 60
+  const nowMin = isOvernight && rawNowMin < startMin ? rawNowMin + 24 * 60 : rawNowMin
   if (nowMin < startMin || nowMin > endMin) return null
   // The grid starts with a 100px first column (court label), rest is hours.
   // Position line relative to the hours area.
@@ -830,11 +846,14 @@ function ManualBookingDialog({
 
   const create = useMutation({
     mutationFn: async () => {
+      // Normalize startMin into 0-24h before serializing — the cell list
+      // may contain extended-frame values (e.g. 25:00 = 01:00 next day).
+      const normalizedStart = ((startMin % (24 * 60)) + 24 * 60) % (24 * 60)
       const res = await api.post("/bookings", {
         venueId,
         sport,
         date,
-        startTime: `${String(Math.floor(startMin / 60)).padStart(2, "0")}:${String(startMin % 60).padStart(2, "0")}`,
+        startTime: `${String(Math.floor(normalizedStart / 60)).padStart(2, "0")}:${String(normalizedStart % 60).padStart(2, "0")}`,
         duration,
         paymentMethod: "cliq",
         notes: `[MANUAL] ${playerName ? `Walk-in: ${playerName}. ` : ""}${notes}`.trim(),
