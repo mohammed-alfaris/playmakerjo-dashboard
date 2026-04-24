@@ -4,20 +4,11 @@ import { useNavigate } from "react-router-dom"
 import {
   ChevronLeft,
   ChevronRight,
-  ArrowRight,
   Plus,
-  Clock,
   Loader2,
-  BarChart3,
-  CalendarCheck,
-  Coins,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import {
   Dialog,
   DialogContent,
@@ -25,35 +16,40 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import api from "@/api/axios"
+import { StatusBadge } from "@/components/shared/StatusBadge"
 import { getBookings, type Booking } from "@/api/bookings"
+import type { Venue, Pitch } from "@/api/venues"
 import { useRole } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
-import type { TranslationKey } from "@/i18n/translations"
 import { formatCurrency } from "@/lib/formatters"
-import type { OperatingHours, DayHours } from "@/lib/types"
-import { StatusBadge } from "@/components/shared/StatusBadge"
+import { LanesTimeline } from "@/features/timeline/LanesTimeline"
+import {
+  parseHHMM,
+  fmt12,
+  fmtRange,
+  renderStatusFor,
+  STATUS_META,
+  GROUP_META,
+  colorFor,
+  type StatusGroup,
+} from "@/lib/timelineDesign"
 
-// ---- helpers ----------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Compact Venue timeline — embedded on the profile page. Same Clean Lanes grid
+// as the main TimelinePage but with a smaller header (no venue picker) and a
+// compact nav group.
+// ---------------------------------------------------------------------------
 
-const DAY_KEY_PAIRS: [string, string][] = [
-  ["sun", "sunday"],
-  ["mon", "monday"],
-  ["tue", "tuesday"],
-  ["wed", "wednesday"],
-  ["thu", "thursday"],
-  ["fri", "friday"],
-  ["sat", "saturday"],
-]
-
-function resolveDay(oh: OperatingHours | undefined, weekdayIdx: number): DayHours | undefined {
-  if (!oh) return undefined
-  const [short, long] = DAY_KEY_PAIRS[weekdayIdx]
-  const hours = oh as unknown as Record<string, DayHours | undefined>
-  return hours[short] ?? hours[long]
-}
+type FilterId = "all" | StatusGroup
 
 function toISODate(d: Date): string {
   const y = d.getFullYear()
@@ -61,892 +57,634 @@ function toISODate(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
 }
-
 function addDays(d: Date, n: number): Date {
   const nd = new Date(d)
   nd.setDate(nd.getDate() + n)
   return nd
 }
 
-function parseTime(hhmm: string | undefined): number | null {
-  if (!hhmm) return null
-  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm)
-  if (!m) return null
-  const h = Number(m[1]), min = Number(m[2])
-  if (h < 0 || h > 23 || min < 0 || min > 59) return null
-  return h * 60 + min
-}
-
-function formatHour(mins: number): string {
-  // Normalize into 0-24h — overnight sessions use an extended frame that may
-  // exceed 1440 minutes; display values should still read as 00:00, 01:00, …
-  const normalized = ((mins % (24 * 60)) + 24 * 60) % (24 * 60)
-  const h = Math.floor(normalized / 60)
-  const m = normalized % 60
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
-}
-
-function formatMinutes(mins: number): string {
-  const normalized = ((mins % (24 * 60)) + 24 * 60) % (24 * 60)
-  const h = Math.floor(normalized / 60)
-  const m = normalized % 60
-  const suffix = h >= 12 ? "PM" : "AM"
-  const h12 = ((h + 11) % 12) + 1
-  return `${h12}:${m.toString().padStart(2, "0")} ${suffix}`
-}
-
-type SlotState = "open" | "past" | "booked" | "spanned"
-
-interface HourCell {
-  /** Start offset in minutes from midnight */
-  startMin: number
-  state: SlotState
-  /** For booked cells, how many 1-hour slots this booking spans (1 or 2) */
-  span?: number
-  booking?: Booking
-  pendingReview?: boolean
-}
-
-/**
- * Build hour-bucket cells (1 per operating hour). Bookings that span multiple
- * hours collapse adjacent cells into a single cell with span=N, and following
- * cells get state="spanned" so they aren't rendered.
- */
-function buildHourCells({
-  operatingHours,
-  weekdayIdx,
-  bookings,
-  now,
-  isToday,
-  isPastDate,
-}: {
-  operatingHours?: OperatingHours
-  weekdayIdx: number
-  bookings: Booking[]
-  now: Date
-  isToday: boolean
-  isPastDate: boolean
-}): { cells: HourCell[]; startHour: number; endHour: number } {
-  const dh = resolveDay(operatingHours, weekdayIdx)
-  if (!dh || dh.closed) return { cells: [], startHour: 0, endHour: 0 }
-  const start = parseTime(dh.open)
-  const end = parseTime(dh.close)
-  if (start == null || end == null) return { cells: [], startHour: 0, endHour: 0 }
-  // Overnight: close <= open means the venue crosses midnight. Work in an
-  // extended frame (minutes may exceed 1440); display helpers mod by 24h.
-  const isOvernight = end <= start
-  const startHour = Math.floor(start / 60)
-  const endExtended = isOvernight ? end + 24 * 60 : end
-  const endHour = Math.ceil(endExtended / 60)
-
-  const rawNowMin = now.getHours() * 60 + now.getMinutes()
-  const nowInFrame = isOvernight && rawNowMin < start ? rawNowMin + 24 * 60 : rawNowMin
-  const nowMin = isToday ? nowInFrame : -1
-  const cells: HourCell[] = []
-
-  for (let h = startHour; h < endHour; h++) {
-    const hourStart = h * 60
-    const hourEnd = hourStart + 60
-    let state: SlotState = "open"
-    if (isPastDate) state = "past"
-    else if (isToday && hourEnd <= nowMin) state = "past"
-
-    let booking: Booking | undefined
-    let pending = false
-    for (const b of bookings) {
-      let bStart = parseTime(b.startTime)
-      if (bStart == null) continue
-      // Bookings that start after midnight on an overnight session are stored
-      // with a small start time (e.g. 01:00). Shift into the extended frame.
-      if (isOvernight && bStart < start) bStart += 24 * 60
-      const bEnd = bStart + (b.duration ?? 0)
-      if (hourStart < bEnd && hourEnd > bStart) {
-        booking = b
-        state = "booked"
-        pending = b.paymentProofStatus === "pending_review"
-        break
-      }
-    }
-    cells.push({ startMin: hourStart, state, booking, pendingReview: pending })
-  }
-
-  // Collapse consecutive booked cells belonging to the same booking id
-  for (let i = 0; i < cells.length; i++) {
-    const c = cells[i]
-    if (c.state !== "booked" || !c.booking) continue
-    let span = 1
-    for (let j = i + 1; j < cells.length; j++) {
-      if (cells[j].state === "booked" && cells[j].booking?.id === c.booking.id) {
-        cells[j].state = "spanned"
-        span += 1
-      } else {
-        break
-      }
-    }
-    c.span = span
-    i += span - 1
-  }
-
-  return { cells, startHour, endHour }
-}
-
-// ---- component --------------------------------------------------------------
-
-export function VenueSlotTimeline({
-  venueId,
-  operatingHours,
-  sports,
-  pricePerHour,
-}: {
-  venueId: string
-  operatingHours?: OperatingHours
-  sports?: string[]
-  pricePerHour?: number
-}) {
+export function VenueSlotTimeline({ venue }: { venue: Venue }) {
   const { t, lang } = useT()
   const { isAdmin, isOwner } = useRole()
+  const canManage = isAdmin || isOwner
   const navigate = useNavigate()
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
-  const [manualOpen, setManualOpen] = useState(false)
-  const [manualPreset, setManualPreset] = useState<{ startMin: number } | null>(null)
+  const [draftOpen, setDraftOpen] = useState(false)
+  const [draftPreset, setDraftPreset] = useState<{
+    startMin?: number
+    duration?: number
+    sport?: string
+    pitchId?: string
+  } | null>(null)
+  const [drawerBooking, setDrawerBooking] = useState<Booking | null>(null)
+  const [filter, setFilter] = useState<FilterId>("all")
 
-  const now = new Date()
   const iso = toISODate(selectedDate)
-  const todayIso = toISODate(now)
+  const todayIso = toISODate(new Date())
   const isToday = iso === todayIso
   const isPastDate = iso < todayIso
-  const weekdayIdx = selectedDate.getDay()
 
   const { data, isLoading } = useQuery({
-    queryKey: ["venue-slots", venueId, iso],
+    queryKey: ["venue-slots", venue.id, iso],
     queryFn: () =>
-      getBookings({ venue_id: venueId, from: iso, to: iso, page: 1, limit: 100 }),
-    enabled: !!venueId,
+      getBookings({ venue_id: venue.id, from: iso, to: iso, page: 1, limit: 100 }),
+    enabled: !!venue.id,
   })
-  const bookings: Booking[] = data?.data ?? []
+  const bookings: Booking[] = useMemo(() => data?.data ?? [], [data])
 
-  const { cells, startHour, endHour } = useMemo(
-    () => buildHourCells({ operatingHours, weekdayIdx, bookings, now, isToday, isPastDate }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [operatingHours, weekdayIdx, bookings, iso]
-  )
+  const counts = useMemo(() => {
+    const g: Record<FilterId, number> = {
+      all: bookings.length,
+      confirmed: 0,
+      hold: 0,
+      done: 0,
+      issue: 0,
+      open: 0,
+      blocked: 0,
+    }
+    for (const b of bookings) {
+      const status = renderStatusFor(b)
+      const group = STATUS_META[status]?.group
+      if (group && group !== "open" && group !== "blocked") g[group]++
+    }
+    return g
+  }, [bookings])
 
-  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
-  // Extra trailing label to show the closing-time boundary (e.g. 03:00 when
-  // hours are 17:00–03:00). No cell sits beneath it — it's just a marker.
-  const boundaryLabels = [...hours, endHour]
-  const isClosed = cells.length === 0
-  const canManage = isAdmin || isOwner
-  const canSeeNames = isAdmin || isOwner
+  const revenue = useMemo(() => {
+    let sum = 0
+    for (const b of bookings) {
+      if (b.status === "cancelled" || b.status === "no_show") continue
+      sum += b.totalAmount ?? b.amount ?? 0
+    }
+    return sum
+  }, [bookings])
+
+  const visibleBookings = useMemo(() => {
+    if (filter === "all") return bookings
+    return bookings.filter((b) => {
+      const status = renderStatusFor(b)
+      return STATUS_META[status]?.group === filter
+    })
+  }, [bookings, filter])
 
   const locale = lang === "ar" ? "ar-JO" : "en-GB"
-
-  // Day label
   const displayDate = new Date(iso + "T00:00:00")
-  const dayOffsetDays = Math.round(
-    (displayDate.getTime() - new Date(todayIso + "T00:00:00").getTime()) / 86400000
-  )
-  const dayLabel = (() => {
-    if (dayOffsetDays === 0) return t("today")
-    if (dayOffsetDays === 1) return t("tomorrow") ?? "Tomorrow"
-    if (dayOffsetDays === -1) return t("yesterday") ?? "Yesterday"
-    return displayDate.toLocaleDateString(locale, { weekday: "long" })
-  })()
-  const dateMono = displayDate.toLocaleDateString(locale, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
+  const dateLabel = displayDate.toLocaleDateString(locale, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
   })
 
-  // Stats for the day
-  const bookedCount = cells.filter((c) => c.state === "booked").length
-  const spannedCount = cells.filter((c) => c.state === "spanned").length
-  const totalBooked = bookedCount + spannedCount
-  const openCount = cells.filter((c) => c.state === "open").length
-  const utilization = cells.length ? Math.round((totalBooked / cells.length) * 100) : 0
-  const uniqueBookings = bookedCount
-  const dayRevenue = bookings.reduce(
-    (acc, b) => acc + (b.totalAmount ?? b.amount ?? 0),
-    0
-  )
-
-  function go(delta: number) {
+  function goDay(delta: number) {
     setSelectedDate((d) => addDays(d, delta))
   }
 
-  function onDateInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value
-    if (!v) return
-    const [y, m, d] = v.split("-").map(Number)
-    setSelectedDate(new Date(y, m - 1, d))
-  }
-
-  function openManualFor(startMin: number) {
-    setManualPreset({ startMin })
-    setManualOpen(true)
-  }
+  const filterPills: Array<{ id: FilterId; label: string; color?: keyof typeof GROUP_META }> = [
+    { id: "all", label: t("filter_all") },
+    { id: "confirmed", label: t("group_confirmed"), color: "confirmed" },
+    { id: "hold", label: t("filter_needs_action"), color: "hold" },
+    { id: "done", label: t("filter_completed"), color: "done" },
+    { id: "issue", label: t("filter_issues"), color: "issue" },
+  ]
 
   return (
-    <div className="space-y-3.5">
-      {/* Page header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="display text-[20px] font-semibold tracking-[-0.02em] text-ink leading-none">
-            {t("slot_timeline") ?? "Slot Timeline"}
+    <div className="space-y-4">
+      {/* Compact header: eyebrow + date + NavGroup | StatPill + New booking */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[hsl(var(--ink-3))]">
+            {t("slot_timeline")}
+          </div>
+          <h2 className="display text-[22px] font-semibold tracking-[-0.02em] text-[hsl(var(--ink))] leading-[1.15] mt-1 truncate">
+            {dateLabel}
           </h2>
-          <p className="mt-1 text-[13px] text-ink-3">
-            {t("slot_timeline_subtitle") ?? "Live availability grid for this court"}
-          </p>
+          <div className="mt-2">
+            <NavGroup
+              onPrev={() => goDay(-1)}
+              onToday={() => setSelectedDate(new Date())}
+              onNext={() => goDay(1)}
+              isToday={isToday}
+              todayLabel={t("today")}
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
+          <StatPill label={t("bookings_label")} value={counts.all} />
+          {canManage && (
+            <Button
+              size="sm"
+              className="h-9 gap-1.5 rounded-[10px] font-semibold"
+              onClick={() => {
+                setDraftPreset(null)
+                setDraftOpen(true)
+              }}
+              disabled={isPastDate}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("new_booking")}
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Controls card: date stepper + legend */}
-      <div className="flex flex-wrap items-center gap-3.5 rounded-2xl bg-card p-3.5 shadow-stadium-sm">
-        {/* Date stepper */}
-        <div className="flex items-center gap-1 rounded-lg bg-surface-2 p-1">
-          <button
-            type="button"
-            onClick={() => go(-1)}
-            aria-label={t("previous_day")}
-            className="rounded-md p-1.5 text-ink-2 transition-colors hover:bg-card"
-          >
-            <ChevronLeft className="h-3.5 w-3.5 rtl-flip" />
-          </button>
-          <div className="min-w-[160px] px-3 text-center">
-            <div className="text-[13px] font-semibold text-ink leading-tight">
-              {dayLabel}
-            </div>
-            <div className="mono text-[10px] text-ink-3">{dateMono}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => go(1)}
-            aria-label={t("next_day")}
-            className="rounded-md p-1.5 text-ink-2 transition-colors hover:bg-card"
-          >
-            <ChevronRight className="h-3.5 w-3.5 rtl-flip" />
-          </button>
-        </div>
-
-        {/* Jump to date input */}
-        <input
-          type="date"
-          value={iso}
-          onChange={onDateInput}
-          className="mono h-8 rounded-md border border-line bg-card px-2 text-[11px] text-ink focus:border-primary focus:outline-none"
-          aria-label="Jump to date"
-        />
-
-        {!isToday && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => setSelectedDate(new Date())}
-          >
-            {t("today")}
-          </Button>
-        )}
-
-        {canManage && (
-          <Button
-            size="sm"
-            className="h-8 gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => {
-              setManualPreset(null)
-              setManualOpen(true)
-            }}
-            disabled={isPastDate || isClosed}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("add_manual_booking") ?? "Add booking"}
-          </Button>
-        )}
-
-        {/* Push legend to end */}
-        <div className="flex-1" />
-
-        {/* Legend — inline on the right */}
-        <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-ink-2">
-          <LegendSwatch variant="open" label={t("open")} />
-          <LegendSwatch variant="booked" label={t("booked")} />
-          <LegendSwatch
-            variant="pending"
-            label={t("pending_review") ?? "Pending"}
-          />
-          <LegendSwatch variant="past" label={t("past")} />
-        </div>
+      {/* Filter pills */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {filterPills.map((g) => {
+          const active = filter === g.id
+          const c = g.color ? colorFor(GROUP_META[g.color].color) : null
+          return (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => setFilter(g.id)}
+              className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[11.5px] font-semibold transition-colors"
+              style={
+                active
+                  ? c
+                    ? { background: c.tint, color: c.ink, border: "none" }
+                    : { background: "hsl(var(--ink))", color: "#fff", border: "none" }
+                  : {
+                      background: "hsl(var(--card))",
+                      color: "hsl(var(--ink-2))",
+                      border: "1px solid hsl(var(--line))",
+                    }
+              }
+            >
+              {c && (
+                <span
+                  aria-hidden
+                  className="inline-block rounded-full"
+                  style={{ width: 6, height: 6, background: c.bg }}
+                />
+              )}
+              {g.label}
+              <span
+                className="num text-[10.5px] font-bold"
+                style={{ opacity: active ? 0.8 : 0.5 }}
+              >
+                {counts[g.id]}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Loading */}
       {isLoading && (
-        <div className="shim h-[104px] w-full rounded-2xl" />
+        <div className="h-[220px] w-full rounded-[16px] bg-[hsl(var(--surface-2))] animate-pulse" />
       )}
 
-      {/* Closed */}
-      {!isLoading && isClosed && (
-        <div className="rounded-2xl bg-card p-10 text-center shadow-stadium-sm">
-          <p className="text-sm text-ink-2">{t("venue_closed_day")}</p>
-        </div>
-      )}
-
-      {/* Grid */}
-      {!isLoading && !isClosed && (
-        <div className="rounded-2xl bg-card p-4 shadow-stadium-sm">
-          {/* Desktop grid */}
-          <div className="hidden overflow-x-auto md:block">
-            <div
-              className="grid min-w-[900px] gap-1"
-              style={{
-                // N hour columns for the cells, plus a narrow fixed-width
-                // trailing column that only holds the closing-time label.
-                gridTemplateColumns: `100px repeat(${hours.length}, minmax(56px, 1fr)) 44px`,
-              }}
-            >
-              {/* Header row: empty + hour labels + closing boundary label */}
-              <div />
-              {boundaryLabels.map((h, i) => (
-                <div
-                  key={`hdr-${i}`}
-                  className={cn(
-                    "mono pb-2 text-[10px] font-semibold text-ink-3",
-                    i < hours.length ? "text-center" : "px-1 text-start"
-                  )}
-                >
-                  {String(h % 24).padStart(2, "0")}:00
-                </div>
-              ))}
-
-              {/* Court 1 row */}
-              <div className="flex items-center gap-2 text-[12px] font-semibold text-ink-2">
-                <div className="mono flex h-6 w-6 items-center justify-center rounded-md bg-surface-2 text-[10px] text-ink-2">
-                  1
-                </div>
-                {t("court") ?? "Court"} 1
-              </div>
-              {cells.map((c, i) => {
-                if (c.state === "spanned") return null
-                return (
-                  <TimelineCell
-                    key={`${c.startMin}-${i}`}
-                    cell={c}
-                    canSeeNames={canSeeNames}
-                    canManage={canManage}
-                    venueId={venueId}
-                    onOpenManual={openManualFor}
-                    onGoToBookings={() =>
-                      navigate(
-                        `/bookings?venue=${venueId}&from=${iso}&to=${iso}`
-                      )
-                    }
-                    t={t}
-                  />
-                )
-              })}
-              {/* Closing-time column has no cell — just the boundary label */}
-              <div />
-            </div>
-
-            {/* Now indicator overlay */}
-            {isToday && <NowLine startHour={startHour} endHour={endHour} now={now} />}
-          </div>
-
-          {/* Mobile list */}
-          <ul className="md:hidden divide-y divide-line/50">
-            {cells.map((c, i) => {
-              if (c.state === "spanned") return null
-              const hourStart = c.startMin
-              const hourEnd = c.startMin + (c.span ?? 1) * 60
-              const label = `${formatMinutes(hourStart)} — ${formatMinutes(hourEnd)}`
-              if (c.state === "booked" && c.booking) {
-                return (
-                  <BookingPopover
-                    key={i}
-                    booking={c.booking}
-                    startMin={hourStart}
-                    endMin={hourEnd}
-                    canSeeNames={canSeeNames}
-                    venueId={venueId}
-                    onGoToBookings={() =>
-                      navigate(`/bookings?venue=${venueId}&from=${iso}&to=${iso}`)
-                    }
-                  >
-                    <li className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2.5 hover:bg-primary/5">
-                      <span className="mono text-[11px] text-ink-2">{label}</span>
-                      <span className="flex items-center gap-2 text-sm font-medium text-primary">
-                        <span className="h-1.5 w-1.5 rounded-full bg-lime" />
-                        {canSeeNames ? c.booking.player.name : t("booked")}
-                      </span>
-                    </li>
-                  </BookingPopover>
-                )
-              }
-              return (
-                <li
-                  key={i}
-                  className={cn(
-                    "flex items-center justify-between gap-3 px-3 py-2.5",
-                    c.state === "past" && "opacity-60",
-                    c.state === "open" && canManage && "cursor-pointer hover:bg-primary/5"
-                  )}
-                  onClick={() => {
-                    if (c.state === "open" && canManage) openManualFor(c.startMin)
-                  }}
-                >
-                  <span className="mono text-[11px] text-ink-2">{label}</span>
-                  <span
-                    className={cn(
-                      "text-[11px] font-medium",
-                      c.state === "past" && "text-ink-3",
-                      c.state === "open" && "text-primary"
-                    )}
-                  >
-                    {c.state === "past" ? t("past") : t("open")}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      )}
-
-      {/* Summary strip */}
-      {!isLoading && !isClosed && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <SummaryCard
-            icon={<BarChart3 className="h-4 w-4" />}
-            label={t("utilization") ?? "Utilization"}
-            value={`${utilization}%`}
-            tone="brand"
-          />
-          <SummaryCard
-            icon={<Plus className="h-4 w-4" />}
-            label={t("open_slots") ?? "Open slots"}
-            value={openCount}
-            tone="brand"
-          />
-          <SummaryCard
-            icon={<CalendarCheck className="h-4 w-4" />}
-            label={t("bookings") ?? "Bookings"}
-            value={uniqueBookings}
-            tone="brand"
-          />
-          <SummaryCard
-            icon={<Coins className="h-4 w-4" />}
-            label={t("day_revenue") ?? "Day revenue"}
-            value={formatCurrency(dayRevenue)}
-            tone="brand"
-          />
-        </div>
+      {/* Lanes grid */}
+      {!isLoading && (
+        <LanesTimeline
+          venue={venue}
+          bookings={visibleBookings}
+          date={selectedDate}
+          compact
+          canManage={canManage && !isPastDate}
+          onCreate={(args) => {
+            setDraftPreset({
+              startMin: args.startMin,
+              duration: args.duration,
+              sport: args.sport,
+              pitchId: args.pitchId,
+            })
+            setDraftOpen(true)
+          }}
+          onOpenBooking={(b) => setDrawerBooking(b)}
+        />
       )}
 
       {/* Manual booking dialog */}
-      {manualOpen && (
-        <ManualBookingDialog
-          venueId={venueId}
+      {draftOpen && (
+        <AssignBookingDialog
+          venueId={venue.id}
           date={iso}
-          preset={manualPreset}
-          sports={sports}
-          pricePerHour={pricePerHour}
-          cells={cells}
-          onClose={() => setManualOpen(false)}
+          preset={draftPreset}
+          sports={venue.sports}
+          pricePerHour={venue.pricePerHour}
+          pitches={venue.pitches ?? []}
+          minDuration={venue.minBookingDuration}
+          maxDuration={venue.maxBookingDuration}
+          onClose={() => setDraftOpen(false)}
+        />
+      )}
+
+      {/* Booking detail drawer */}
+      {drawerBooking && (
+        <BookingDrawer
+          booking={drawerBooking}
+          onClose={() => setDrawerBooking(null)}
+          onView={() => {
+            const id = drawerBooking.id
+            navigate(
+              `/bookings?venue=${venue.id}&from=${iso}&to=${iso}&highlight=${id}`,
+            )
+          }}
+          onCompleted={() => setDrawerBooking(null)}
         />
       )}
     </div>
   )
 }
 
-// ---- timeline cell ---------------------------------------------------------
+// ---------------------------------------------------------------------------
+// NavGroup / NavBtn — shared with TimelinePage visual language
+// ---------------------------------------------------------------------------
 
-function TimelineCell({
-  cell,
-  canSeeNames,
-  canManage,
-  venueId,
-  onOpenManual,
-  onGoToBookings,
-  t,
+function NavGroup({
+  onPrev,
+  onToday,
+  onNext,
+  isToday,
+  todayLabel,
 }: {
-  cell: HourCell
-  canSeeNames: boolean
-  canManage: boolean
-  venueId: string
-  onOpenManual: (startMin: number) => void
-  onGoToBookings: () => void
-  t: (key: TranslationKey) => string
+  onPrev: () => void
+  onToday: () => void
+  onNext: () => void
+  isToday: boolean
+  todayLabel: string
 }) {
-  const span = cell.span ?? 1
-  // Extended frame values (e.g. 25) render as wall-clock hours (01)
-  const h = Math.floor(cell.startMin / 60) % 24
-  const hourLabel = `${String(h).padStart(2, "0")}:00`
-
-  if (cell.state === "booked" && cell.booking) {
-    const isPending = cell.pendingReview
-    const className = cn(
-      "h-11 rounded-md px-2 flex items-center gap-1.5 text-[11px] font-semibold overflow-hidden w-full cursor-pointer transition-transform hover:scale-[1.01]",
-      isPending
-        ? "bg-amber-tint text-amber-ink"
-        : "bg-primary text-primary-foreground"
-    )
-    const endHour = ((cell.startMin + span * 60) / 60) % 24
-    return (
-      <div style={{ gridColumn: `span ${span}` }}>
-        <BookingPopover
-          booking={cell.booking}
-          startMin={cell.startMin}
-          endMin={cell.startMin + span * 60}
-          canSeeNames={canSeeNames}
-          venueId={venueId}
-          onGoToBookings={onGoToBookings}
-        >
-          <button type="button" className={className}>
-            {!isPending && (
-              <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-lime shadow-[0_0_6px_hsl(var(--lime))]" />
-            )}
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <div className="truncate">
-                {canSeeNames ? cell.booking.player.name : t("booked")}
-              </div>
-              {span === 2 && (
-                <div className="mono text-[9px] font-medium opacity-85">
-                  {String(h).padStart(2, "0")}:00–{String(endHour).padStart(2, "0")}:00
-                </div>
-              )}
-            </div>
-            {isPending && (
-              <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-amber" />
-            )}
-          </button>
-        </BookingPopover>
-      </div>
-    )
-  }
-
-  if (cell.state === "open") {
-    const cls = cn(
-      "h-11 rounded-md flex items-center justify-center text-[14px] opacity-50 border border-dashed border-line-strong bg-card text-ink-3",
-      canManage && "cursor-pointer hover:border-primary/60 hover:bg-primary/5 hover:text-primary hover:opacity-100"
-    )
-    return (
-      <button
-        type="button"
-        className={cls}
-        onClick={canManage ? () => onOpenManual(cell.startMin) : undefined}
-        aria-label={`Open ${hourLabel}`}
-        disabled={!canManage}
-      >
-        +
-      </button>
-    )
-  }
-
-  // past / blocked
   return (
-    <div
-      className="h-11 rounded-md bg-surface-3 text-ink-3 [background-image:repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(0,0,0,0.06)_4px,rgba(0,0,0,0.06)_5px)]"
-      aria-label="Past"
-    />
-  )
-}
-
-// ---- sub-components ---------------------------------------------------------
-
-function LegendSwatch({
-  variant,
-  label,
-}: {
-  variant: "open" | "booked" | "pending" | "past"
-  label: string
-}) {
-  const cls = cn(
-    "inline-block h-3 w-3 rounded-[3px] border",
-    variant === "open" && "border-dashed border-line-strong bg-card",
-    variant === "booked" && "border-transparent bg-primary",
-    variant === "pending" && "border-transparent bg-amber-tint",
-    variant === "past" &&
-      "border-transparent bg-surface-3 [background-image:repeating-linear-gradient(45deg,transparent,transparent_3px,rgba(0,0,0,0.1)_3px,rgba(0,0,0,0.1)_4px)]"
-  )
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={cls} />
-      <span>{label}</span>
-    </span>
-  )
-}
-
-function NowLine({
-  startHour,
-  endHour,
-  now,
-}: {
-  startHour: number
-  endHour: number
-  now: Date
-}) {
-  const rawNowMin = now.getHours() * 60 + now.getMinutes()
-  const startMin = startHour * 60
-  const endMin = endHour * 60
-  // When the grid spans past midnight, lift nowMin into the extended frame.
-  const isOvernight = endMin > 24 * 60
-  const nowMin = isOvernight && rawNowMin < startMin ? rawNowMin + 24 * 60 : rawNowMin
-  if (nowMin < startMin || nowMin > endMin) return null
-  // The grid starts with a 100px first column (court label), then N hour
-  // cells, then a 44px closing-time label column. Position the now-line
-  // relative to the hours area (between the label col and the close col).
-  const labelColPx = 100
-  const closeColPx = 44
-  const gapPx = 4
-  const pct = ((nowMin - startMin) / (endMin - startMin)) * 100
-  return (
-    <div
-      className="pointer-events-none relative -mt-[44px] h-11"
-      aria-hidden
-      style={{ paddingInlineStart: labelColPx + gapPx }}
-    >
-      <div
-        className="relative h-full"
-        style={{ width: `calc(100% - ${labelColPx + gapPx + closeColPx + gapPx}px)` }}
-      >
-        <div
-          className="absolute -top-1 bottom-0 w-[2px] bg-rose"
-          style={{ insetInlineStart: `${pct}%` }}
-        >
-          <div className="absolute -top-1.5 -left-[5px] h-3 w-3 rounded-full bg-rose ring-2 ring-card" />
-        </div>
-      </div>
+    <div className="inline-flex bg-card border border-[hsl(var(--line))] rounded-[10px] overflow-hidden">
+      <NavBtn onClick={onPrev} ariaLabel="previous day">
+        <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" />
+      </NavBtn>
+      <NavBtn onClick={onToday} wide highlight={!isToday}>
+        {todayLabel}
+      </NavBtn>
+      <NavBtn onClick={onNext} ariaLabel="next day">
+        <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
+      </NavBtn>
     </div>
   )
 }
 
-function SummaryCard({
-  icon,
-  label,
-  value,
-  tone = "brand",
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string | number
-  tone?: "brand" | "amber" | "rose" | "indigo"
-}) {
-  const toneCls = {
-    brand: "bg-brand-tint text-brand-ink",
-    amber: "bg-amber-tint text-amber-ink",
-    rose: "bg-rose-tint text-rose-ink",
-    indigo: "bg-indigo-tint text-indigo-ink",
-  }[tone]
-  return (
-    <div className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-stadium-sm">
-      <div
-        className={cn(
-          "flex h-9 w-9 flex-none items-center justify-center rounded-lg",
-          toneCls
-        )}
-      >
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
-          {label}
-        </div>
-        <div className="display num text-[20px] font-semibold leading-tight text-ink">
-          {value}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function BookingPopover({
-  booking,
-  startMin,
-  endMin,
-  canSeeNames,
-  onGoToBookings,
+function NavBtn({
   children,
+  onClick,
+  wide,
+  highlight,
+  ariaLabel,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  wide?: boolean
+  highlight?: boolean
+  ariaLabel?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className={cn(
+        "inline-flex items-center justify-center text-[12px] font-semibold bg-transparent border-0 border-s border-[hsl(var(--line))] first:border-s-0 text-[hsl(var(--ink-2))] hover:bg-[hsl(var(--surface-2))]",
+        wide ? "h-[30px] px-3" : "h-[30px] w-[30px]",
+        highlight && "text-[hsl(var(--ink))]",
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// StatPill — compact header KPI
+// ---------------------------------------------------------------------------
+
+function StatPill({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="bg-card border border-[hsl(var(--line))] rounded-[10px] px-3 py-1.5 leading-tight">
+      <div className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-[hsl(var(--ink-3))]">
+        {label}
+      </div>
+      <div className="num display text-[15px] font-bold text-[hsl(var(--ink))] mt-0.5 whitespace-nowrap">
+        {value}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// BookingDrawer — right side Sheet mirrored from TimelinePage. Kept local to
+// avoid a cross-feature import; same behavior (complete / cancel mutations).
+// ---------------------------------------------------------------------------
+
+function BookingDrawer({
+  booking,
+  onClose,
+  onView,
+  onCompleted,
 }: {
   booking: Booking
-  startMin: number
-  endMin: number
-  canSeeNames: boolean
-  venueId: string
-  onGoToBookings: () => void
-  children: React.ReactNode
+  onClose: () => void
+  onView: () => void
+  onCompleted?: () => void
 }) {
   const { t } = useT()
+  const qc = useQueryClient()
+  const startMin = parseHHMM(booking.startTime)
+  const endMin = startMin + (booking.duration ?? 0)
+
+  const complete = useMutation({
+    mutationFn: () => api.patch(`/bookings/${booking.id}/complete`),
+    onSuccess: () => {
+      toast.success(t("mark_completed"))
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["venue-slots"] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      onCompleted?.()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? t("manual_booking_failed"))
+    },
+  })
+
+  const cancel = useMutation({
+    mutationFn: () => api.patch(`/bookings/${booking.id}/cancel`),
+    onSuccess: () => {
+      toast.success(t("status_cancelled"))
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["venue-slots"] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      onClose()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? t("manual_booking_failed"))
+    },
+  })
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent className="w-72 space-y-3 p-4" align="center">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold text-ink">
-              {canSeeNames ? booking.player.name : t("booked")}
-            </p>
-            <p className="mono text-[11px] text-ink-3">
-              {formatMinutes(startMin)} — {formatMinutes(endMin)}
-            </p>
+    <Sheet open onOpenChange={(v) => !v && onClose()}>
+      <SheetContent side="right" className="w-[420px] sm:max-w-[420px]">
+        <SheetHeader>
+          <SheetTitle className="display tracking-[-0.02em]">
+            {booking.player?.name ?? "—"}
+          </SheetTitle>
+        </SheetHeader>
+        <div className="space-y-4 mt-4">
+          <div className="flex items-center justify-between">
+            <StatusBadge status={booking.status} />
+            <span className="mono text-[11.5px] text-[hsl(var(--ink-3))]">
+              {fmtRange(startMin, endMin)}
+            </span>
           </div>
-          <StatusBadge status={booking.status} />
+          <div className="hair" />
+          <dl className="grid grid-cols-2 gap-3 text-[12.5px]">
+            <InfoCell label={t("sport")} value={<span className="capitalize">{booking.sport}</span>} />
+            <InfoCell label={t("duration")} value={`${booking.duration} min`} />
+            <InfoCell label={t("amount")} value={formatCurrency(booking.totalAmount ?? booking.amount)} />
+            {booking.paymentMethod && (
+              <InfoCell
+                label={t("payment_method")}
+                value={<span className="uppercase">{booking.paymentMethod}</span>}
+              />
+            )}
+            {booking.pitchSize && (
+              <InfoCell label={t("pitch_size") ?? "Size"} value={`${booking.pitchSize}-aside`} />
+            )}
+          </dl>
+          <div className="hair" />
+          <div className="space-y-2">
+            <Button size="sm" variant="outline" className="w-full" onClick={onView}>
+              {t("view_drawer")}
+            </Button>
+            {booking.status === "confirmed" && (
+              <Button
+                size="sm"
+                className="w-full gap-1"
+                onClick={() => complete.mutate()}
+                disabled={complete.isPending}
+              >
+                {complete.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : null}
+                {t("mark_completed")}
+              </Button>
+            )}
+            {["pending", "pending_payment", "pending_review", "confirmed"].includes(
+              booking.status,
+            ) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="w-full text-[hsl(var(--rose-ink))] gap-1"
+                onClick={() => cancel.mutate()}
+                disabled={cancel.isPending}
+              >
+                {cancel.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : null}
+                {t("cancel")}
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="hair" />
-        <dl className="space-y-1.5 text-xs">
-          <div className="flex justify-between">
-            <dt className="text-ink-3">{t("sport")}</dt>
-            <dd className="font-medium capitalize text-ink">{booking.sport}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-ink-3">{t("amount")}</dt>
-            <dd className="num mono font-semibold text-ink">
-              {formatCurrency(booking.totalAmount ?? booking.amount)}
-            </dd>
-          </div>
-          {booking.paymentMethod && (
-            <div className="flex justify-between">
-              <dt className="text-ink-3">{t("payment_method")}</dt>
-              <dd className="font-medium uppercase text-ink">
-                {booking.paymentMethod}
-              </dd>
-            </div>
-          )}
-        </dl>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={onGoToBookings}
-        >
-          {t("view_in_bookings")}
-          <ArrowRight className="h-3.5 w-3.5 ms-1.5 rtl-flip" />
-        </Button>
-      </PopoverContent>
-    </Popover>
+      </SheetContent>
+    </Sheet>
   )
 }
 
-// ---- Manual booking dialog --------------------------------------------------
+function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--ink-3))]">
+        {label}
+      </dt>
+      <dd className="font-medium text-[hsl(var(--ink))] mt-0.5">{value}</dd>
+    </div>
+  )
+}
 
-function ManualBookingDialog({
+// ---------------------------------------------------------------------------
+// AssignBookingDialog — identical to TimelinePage's. Duplicated (rather than
+// cross-imported) to keep features self-contained; both share the same
+// underlying mutation path.
+// ---------------------------------------------------------------------------
+
+function AssignBookingDialog({
   venueId,
   date,
   preset,
   sports,
   pricePerHour,
-  cells,
+  pitches,
+  minDuration,
+  maxDuration,
   onClose,
 }: {
   venueId: string
   date: string
-  preset: { startMin: number } | null
+  preset: {
+    startMin?: number
+    duration?: number
+    sport?: string
+    pitchId?: string
+  } | null
   sports?: string[]
   pricePerHour?: number
-  cells: HourCell[]
+  pitches: Pitch[]
+  minDuration?: number
+  maxDuration?: number
   onClose: () => void
 }) {
   const { t } = useT()
   const qc = useQueryClient()
-
-  const openStarts = cells
-    .filter((c) => c.state === "open")
-    .map((c) => c.startMin)
-
-  const [startMin, setStartMin] = useState<number>(
-    preset?.startMin ?? openStarts[0] ?? 9 * 60
-  )
-  const [duration, setDuration] = useState<number>(60)
-  const [sport, setSport] = useState<string>(sports?.[0] ?? "football")
+  const [sport, setSport] = useState<string>(preset?.sport ?? sports?.[0] ?? "football")
   const [playerName, setPlayerName] = useState("")
   const [notes, setNotes] = useState("")
 
-  const amount = pricePerHour ? (pricePerHour * duration) / 60 : null
+  const durationOptions = useMemo(() => {
+    const all = [30, 60, 90, 120]
+    const min = minDuration ?? 60
+    const max = maxDuration ?? 180
+    const filtered = all.filter((d) => d >= min && d <= max)
+    return filtered.length > 0 ? filtered : [min]
+  }, [minDuration, maxDuration])
+  const [durationChoice, setDurationChoice] = useState<number>(preset?.duration ?? 60)
+  const duration = durationOptions.includes(durationChoice)
+    ? durationChoice
+    : durationOptions[0]
+
+  const sportPitches = useMemo(
+    () => pitches.filter((p) => p.sport.toLowerCase() === sport.toLowerCase()),
+    [pitches, sport],
+  )
+  const [pitchIdChoice, setPitchIdChoice] = useState<string>(preset?.pitchId ?? "")
+  const pitchId =
+    pitchIdChoice && sportPitches.some((p) => p.id === pitchIdChoice)
+      ? pitchIdChoice
+      : sportPitches[0]?.id ?? ""
+  const selectedPitch = useMemo(
+    () => sportPitches.find((p) => p.id === pitchId) ?? null,
+    [sportPitches, pitchId],
+  )
+
+  const offeredSizes = useMemo(() => {
+    if (!selectedPitch || selectedPitch.sport.toLowerCase() !== "football") return []
+    const parent = selectedPitch.parentSize
+    if (!parent) return []
+    return [parent, ...(selectedPitch.subSizes ?? [])]
+  }, [selectedPitch])
+  const effectivePrices: Record<string, number> = useMemo(
+    () => selectedPitch?.sizePrices ?? {},
+    [selectedPitch],
+  )
+  const [pitchSizeChoice, setPitchSizeChoice] = useState<string | null>(null)
+  const pitchSize: string | null =
+    offeredSizes.length === 0
+      ? null
+      : pitchSizeChoice && offeredSizes.includes(pitchSizeChoice)
+        ? pitchSizeChoice
+        : offeredSizes[0]
+
+  const [startMin, setStartMin] = useState<number>(preset?.startMin ?? 9 * 60)
+
+  const amount = useMemo(() => {
+    const hours = duration / 60
+    if (pitchSize && effectivePrices[pitchSize] != null) {
+      return effectivePrices[pitchSize] * hours
+    }
+    const rate = selectedPitch?.pricePerHour ?? pricePerHour
+    return rate ? rate * hours : null
+  }, [pitchSize, effectivePrices, selectedPitch, pricePerHour, duration])
 
   const create = useMutation({
     mutationFn: async () => {
-      // Normalize startMin into 0-24h before serializing — the cell list
-      // may contain extended-frame values (e.g. 25:00 = 01:00 next day).
-      const normalizedStart = ((startMin % (24 * 60)) + 24 * 60) % (24 * 60)
+      const normalized = ((startMin % (24 * 60)) + 24 * 60) % (24 * 60)
+      const startHH = String(Math.floor(normalized / 60)).padStart(2, "0")
+      const startMM = String(normalized % 60).padStart(2, "0")
+      const notePrefix = `[MANUAL] [${sport}]`
+      const walkIn = playerName ? ` Walk-in: ${playerName}.` : ""
+      const extra = notes ? ` ${notes}` : ""
+      const pitchIdToSend =
+        pitchId && !pitchId.startsWith("legacy-") ? pitchId : undefined
       const res = await api.post("/bookings", {
         venueId,
         sport,
         date,
-        startTime: `${String(Math.floor(normalizedStart / 60)).padStart(2, "0")}:${String(normalizedStart % 60).padStart(2, "0")}`,
+        startTime: `${startHH}:${startMM}`,
         duration,
         paymentMethod: "cliq",
-        notes: `[MANUAL] ${playerName ? `Walk-in: ${playerName}. ` : ""}${notes}`.trim(),
+        notes: `${notePrefix}${walkIn}${extra}`.trim(),
+        isManual: true,
+        ...(pitchSize ? { pitchSize } : {}),
+        ...(pitchIdToSend ? { pitchId: pitchIdToSend } : {}),
       })
       return res.data
     },
     onSuccess: () => {
-      toast.success(t("manual_booking_created") ?? "Manual booking created")
-      qc.invalidateQueries({ queryKey: ["venue-slots", venueId] })
+      toast.success(t("manual_booking_created"))
+      qc.invalidateQueries({ queryKey: ["venue-slots"] })
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
       qc.invalidateQueries({ queryKey: ["bookings"] })
       onClose()
     },
     onError: (e: { response?: { data?: { message?: string } } }) => {
-      toast.error(
-        e.response?.data?.message ?? t("manual_booking_failed") ?? "Failed to create booking"
-      )
+      toast.error(e.response?.data?.message ?? t("manual_booking_failed"))
     },
   })
-
-  const handleSubmit = () => {
-    if (openStarts.length === 0) {
-      toast.error(t("no_open_slots") ?? "No open slots available")
-      return
-    }
-    create.mutate()
-  }
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="display text-lg font-semibold tracking-tight">
-            {t("add_manual_booking") ?? "Add manual booking"}
+          <DialogTitle className="display tracking-[-0.02em]">
+            {t("draft_review")}
           </DialogTitle>
         </DialogHeader>
-
         <div className="space-y-4 py-2">
-          <p className="text-xs text-ink-3">
-            {t("manual_booking_hint") ??
-              "Block a slot for a walk-in player or in-person booking. The booking is logged under your account."}
-          </p>
-
           <div className="grid grid-cols-2 gap-3">
-            <FieldLabel label={t("start_time") ?? "Start"}>
+            <Field label={t("start_time")}>
+              <input
+                type="text"
+                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm"
+                value={fmt12(startMin)}
+                readOnly
+              />
+            </Field>
+            <Field label={t("duration")}>
               <select
-                value={startMin}
-                onChange={(e) => setStartMin(Number(e.target.value))}
-                className="mono h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink focus:border-primary focus:outline-none"
+                value={duration}
+                onChange={(e) => setDurationChoice(Number(e.target.value))}
+                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
               >
-                {openStarts.length === 0 && <option value={startMin}>—</option>}
-                {openStarts.map((m) => (
-                  <option key={m} value={m}>
-                    {formatHour(m)}
+                {durationOptions.map((d) => (
+                  <option key={d} value={d}>
+                    {d === 30
+                      ? "30 min"
+                      : d === 60
+                        ? "1 h"
+                        : d === 90
+                          ? "1 h 30"
+                          : d === 120
+                            ? "2 h"
+                            : `${d} min`}
                   </option>
                 ))}
               </select>
-            </FieldLabel>
-
-            <FieldLabel label={t("duration") ?? "Duration"}>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="mono h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink focus:border-primary focus:outline-none"
-              >
-                <option value={30}>30 min</option>
-                <option value={60}>1 h</option>
-                <option value={90}>1 h 30</option>
-                <option value={120}>2 h</option>
-              </select>
-            </FieldLabel>
+            </Field>
           </div>
 
-          <FieldLabel label={t("sport") ?? "Sport"}>
+          <Field label={t("start_time")}>
+            <input
+              type="time"
+              value={`${String(Math.floor(((startMin % 1440) + 1440) % 1440 / 60)).padStart(2, "0")}:${String(startMin % 60).padStart(2, "0")}`}
+              onChange={(e) => {
+                const [h, m] = e.target.value.split(":").map(Number)
+                setStartMin(h * 60 + m)
+              }}
+              className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+            />
+          </Field>
+
+          <Field label={t("sport")}>
             <select
               value={sport}
               onChange={(e) => setSport(e.target.value)}
-              className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm capitalize text-ink focus:border-primary focus:outline-none"
+              className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm capitalize text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
             >
               {(sports && sports.length > 0
                 ? sports
@@ -957,55 +695,90 @@ function ManualBookingDialog({
                 </option>
               ))}
             </select>
-          </FieldLabel>
+          </Field>
 
-          <FieldLabel label={t("player_name") ?? "Walk-in player (optional)"}>
+          {sportPitches.length > 1 && (
+            <Field label={t("pitch") ?? "Pitch"}>
+              <select
+                value={pitchId}
+                onChange={(e) => setPitchIdChoice(e.target.value)}
+                className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+              >
+                {sportPitches.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.parentSize ? ` · ${p.parentSize}-aside` : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          {offeredSizes.length > 1 && (
+            <Field label={t("pitch_size") ?? "Pitch size"}>
+              <select
+                value={pitchSize ?? ""}
+                onChange={(e) => setPitchSizeChoice(e.target.value)}
+                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+              >
+                {offeredSizes.map((s) => {
+                  const price = effectivePrices[s]
+                  return (
+                    <option key={s} value={s}>
+                      {s}-aside
+                      {price != null ? ` · ${formatCurrency(price)}/h` : ""}
+                    </option>
+                  )
+                })}
+              </select>
+            </Field>
+          )}
+
+          <Field label={t("player_name")}>
             <input
               type="text"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              placeholder={t("player_name_placeholder") ?? "Faris Odeh"}
-              className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:outline-none"
+              placeholder={t("player_name_placeholder")}
+              className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] placeholder:text-[hsl(var(--ink-3))] focus:border-[hsl(var(--brand))] focus:outline-none"
             />
-          </FieldLabel>
+          </Field>
 
-          <FieldLabel label={t("notes") ?? "Notes"}>
+          <Field label={t("notes")}>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder={t("notes_placeholder") ?? "Paid cash at venue…"}
-              className="w-full rounded-md border border-line bg-card px-2 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:outline-none"
+              placeholder={t("notes_placeholder")}
+              className="w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 py-1.5 text-sm text-[hsl(var(--ink))] placeholder:text-[hsl(var(--ink-3))] focus:border-[hsl(var(--brand))] focus:outline-none"
             />
-          </FieldLabel>
+          </Field>
 
           {amount != null && (
-            <div className="flex items-center justify-between rounded-lg bg-brand-tint px-3 py-2 text-sm">
-              <span className="text-brand-ink">
-                {t("estimated_amount") ?? "Estimated"}
-              </span>
-              <span className="num mono font-semibold text-brand-ink">
+            <div className="flex items-center justify-between rounded-lg bg-[hsl(var(--brand-tint))] px-3 py-2 text-sm">
+              <span className="text-[hsl(var(--brand-ink))]">{t("estimated_amount")}</span>
+              <span className="mono font-semibold text-[hsl(var(--brand-ink))]">
                 {formatCurrency(amount)}
               </span>
             </div>
           )}
         </div>
-
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={onClose} disabled={create.isPending}>
-            {t("cancel") ?? "Cancel"}
+            <X className="h-3.5 w-3.5" />
+            {t("cancel")}
           </Button>
           <Button
-            onClick={handleSubmit}
-            disabled={create.isPending || openStarts.length === 0}
+            onClick={() => create.mutate()}
+            disabled={create.isPending}
             className="gap-1"
           >
             {create.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Clock className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5" />
             )}
-            {t("create_booking") ?? "Create booking"}
+            {t("draft_create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1013,16 +786,10 @@ function ManualBookingDialog({
   )
 }
 
-function FieldLabel({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--ink-3))]">
         {label}
       </span>
       {children}

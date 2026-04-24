@@ -13,7 +13,7 @@ import {
   SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { getBookings, cancelSeries, completeBooking, markNoShow, type Booking } from "@/api/bookings"
-import { getVenues } from "@/api/venues"
+import { getVenues, type Venue } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
 import { useOwnerFilter, useRole } from "@/hooks/useRole"
 import { BOOKING_STATUSES } from "@/lib/constants"
@@ -34,6 +34,7 @@ export default function BookingsPage() {
   const [from,     setFrom]     = useState("")
   const [to,       setTo]       = useState("")
   const [venue_id, setVenueId]  = useState("all")
+  const [pitch_id, setPitchId]  = useState("all")
   const [reviewBookingId, setReviewBookingId] = useState<string | null>(null)
   const [cancelGroupId, setCancelGroupId] = useState<string | null>(null)
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
@@ -77,13 +78,14 @@ export default function BookingsPage() {
   )
 
   const { data, isLoading } = useQuery({
-    queryKey: ["bookings", { page, limit, status, from, to, venue_id, ...ownerFilter }],
+    queryKey: ["bookings", { page, limit, status, from, to, venue_id, pitch_id, ...ownerFilter }],
     queryFn: () => getBookings({
       page, limit,
       status:   status   === "all" ? undefined : status,
       from:     from     || undefined,
       to:       to       || undefined,
       venue_id: venue_id === "all" ? undefined : venue_id,
+      pitch_id: pitch_id === "all" ? undefined : pitch_id,
       ...ownerFilter,
     }),
   })
@@ -95,7 +97,21 @@ export default function BookingsPage() {
 
   const bookings: Booking[] = data?.data ?? []
   const pagination          = data?.pagination ?? { page, limit, total: 0 }
-  const venueOptions        = venuesData?.data ?? []
+  const venueOptions: Venue[] = venuesData?.data ?? []
+
+  // Pitch filter/column only appear when the user has narrowed to a single
+  // venue AND that venue has >1 pitch. Keeps the default view identical to
+  // pre-multi-pitch for the common single-pitch case.
+  const selectedVenue = venue_id === "all"
+    ? null
+    : venueOptions.find((v) => v.id === venue_id) ?? null
+  const selectedPitches = selectedVenue?.pitches ?? []
+  const showPitchControls = selectedPitches.length > 1
+
+  // Build a fast lookup for pitch names so the column can render a friendly
+  // label without re-scanning the pitches array on every row.
+  const pitchNameById = new Map<string, string>()
+  for (const p of selectedPitches) pitchNameById.set(p.id, p.name)
 
   const columns: ColumnDef<Booking>[] = [
     {
@@ -121,6 +137,26 @@ export default function BookingsPage() {
         <span className="font-medium text-sm">{row.original.venue.name}</span>
       ),
     },
+    // Pitch column only appears in multi-pitch context. Legacy bookings with
+    // no pitchId resolve on the server to the venue's first-of-sport pitch —
+    // the map lookup below therefore always hits when the venue is multi-pitch.
+    ...(showPitchControls
+      ? ([
+          {
+            id: "pitch",
+            header: t("pitch"),
+            cell: ({ row }) => {
+              const pid = row.original.pitchId
+              const name = pid ? pitchNameById.get(pid) : undefined
+              return (
+                <span className="text-sm">
+                  {name ?? <span className="text-muted-foreground">—</span>}
+                </span>
+              )
+            },
+          },
+        ] satisfies ColumnDef<Booking>[])
+      : []),
     {
       accessorKey: "player",
       header: t("player"),
@@ -130,6 +166,21 @@ export default function BookingsPage() {
       accessorKey: "sport",
       header: t("sport"),
       cell: ({ row }) => <span className="capitalize">{row.original.sport}</span>,
+    },
+    {
+      accessorKey: "pitchSize",
+      header: t("pitch_size"),
+      // Empty cell for legacy bookings on single-size venues
+      cell: ({ row }) => {
+        const sz = row.original.pitchSize
+        if (!sz) return <span className="text-muted-foreground">—</span>
+        return (
+          <span className="text-xs font-medium">
+            {sz}
+            {t("a_side")}
+          </span>
+        )
+      },
     },
     {
       accessorKey: "date",
@@ -269,23 +320,53 @@ export default function BookingsPage() {
           title={t("to_date")}
         />
 
-        <Select value={venue_id} onValueChange={handleFilterChange(setVenueId)}>
+        <Select
+          value={venue_id}
+          onValueChange={(v) => {
+            // Changing venue invalidates the pitch filter (pitches are
+            // venue-scoped), so reset it in lockstep.
+            setVenueId(v)
+            setPitchId("all")
+            resetPage()
+          }}
+        >
           <SelectTrigger className="w-48">
             <SelectValue placeholder={t("all_venues")} />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("all_venues")}</SelectItem>
-            {venueOptions.map((v: { id: string; name: string }) => (
+            {venueOptions.map((v) => (
               <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {(status !== "all" || from || to || venue_id !== "all") && (
+
+        {showPitchControls && (
+          <Select value={pitch_id} onValueChange={handleFilterChange(setPitchId)}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder={t("pick_pitch")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("pitches")}</SelectItem>
+              {selectedPitches.map((p) => (
+                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {(status !== "all" || from || to || venue_id !== "all" || pitch_id !== "all") && (
           <Button
             variant="ghost"
             size="sm"
             className="text-xs text-muted-foreground"
-            onClick={() => { setStatus("all"); setFrom(""); setTo(""); setVenueId("all"); resetPage() }}
+            onClick={() => {
+              setStatus("all")
+              setFrom("")
+              setTo("")
+              setVenueId("all")
+              setPitchId("all")
+              resetPage()
+            }}
           >
             <X className="h-3 w-3 me-1" />
             {t("clear_filters")}
@@ -302,11 +383,18 @@ export default function BookingsPage() {
         emptyMessage={t("no_bookings")}
         emptyIcon={CalendarCheck}
         emptyAction={
-          (status !== "all" || from || to || venue_id !== "all") ? (
+          (status !== "all" || from || to || venue_id !== "all" || pitch_id !== "all") ? (
             <Button
               size="sm"
               variant="outline"
-              onClick={() => { setStatus("all"); setFrom(""); setTo(""); setVenueId("all"); resetPage() }}
+              onClick={() => {
+                setStatus("all")
+                setFrom("")
+                setTo("")
+                setVenueId("all")
+                setPitchId("all")
+                resetPage()
+              }}
             >
               <X className="h-3 w-3 me-1" />
               {t("clear_filters")}

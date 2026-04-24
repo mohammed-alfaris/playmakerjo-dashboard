@@ -5,6 +5,11 @@ export interface Booking {
   venue: { id: string; name: string; city?: string; images?: string[] }
   player: { id: string; name: string }
   sport: string
+  // Which physical pitch this booking lives on. Legacy rows (no pitchId on the DB)
+  // are projected to the venue's implicit first-of-sport pitch on read, so this is
+  // always populated for rendering/filtering.
+  pitchId?: string | null
+  pitchSize?: string | null     // "5" | "6" | "7" | "8" | "11" — null on legacy single-size venues
   date: string
   startTime?: string
   duration: number
@@ -29,6 +34,10 @@ export interface BookingsParams {
   limit?: number
   status?: string
   venue_id?: string
+  // Filter to a specific pitch. Legacy IDs ("legacy-{venueId}-{sport}") are
+  // resolved server-side to the venue's first-of-sport pitch, so callers can
+  // treat every pitch uniformly.
+  pitch_id?: string
   from?: string
   to?: string
   sort?: string

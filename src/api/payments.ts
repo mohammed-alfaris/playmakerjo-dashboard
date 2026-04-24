@@ -14,9 +14,15 @@ export interface PaymentsParams {
   page?: number
   limit?: number
   status?: string
+  /** When set, backend filters payments by the linked booking's venue_id. */
+  venueId?: string
 }
 
 export async function getPayments(params: PaymentsParams) {
-  const res = await api.get("/payments", { params })
+  const { venueId, ...rest } = params
+  // Backend expects snake_case `venue_id`.
+  const query: Record<string, unknown> = { ...rest }
+  if (venueId) query.venue_id = venueId
+  const res = await api.get("/payments", { params: query })
   return res.data
 }

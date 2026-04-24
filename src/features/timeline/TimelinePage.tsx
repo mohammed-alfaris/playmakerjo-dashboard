@@ -4,27 +4,12 @@ import { useNavigate } from "react-router-dom"
 import {
   ChevronLeft,
   ChevronRight,
-  BarChart3,
   Plus,
-  Clock,
-  Coins,
-  ArrowRight,
-  MapPin,
   Loader2,
+  CalendarDays,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -32,40 +17,35 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import api from "@/api/axios"
 import { StatusBadge } from "@/components/shared/StatusBadge"
-import { getVenues, type Venue } from "@/api/venues"
+import { getVenues, type Venue, type Pitch } from "@/api/venues"
 import { getBookings, type Booking } from "@/api/bookings"
 import { useRole, useOwnerFilter } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
-import type { TranslationKey } from "@/i18n/translations"
 import { formatCurrency } from "@/lib/formatters"
-import type { OperatingHours, DayHours } from "@/lib/types"
+import { LanesTimeline } from "./LanesTimeline"
+import { Segmented } from "@/components/shared/design/Segmented"
+import {
+  parseHHMM,
+  fmt12,
+  fmtRange,
+  renderStatusFor,
+  STATUS_META,
+  GROUP_META,
+  colorFor,
+  type StatusGroup,
+} from "@/lib/timelineDesign"
 
-// Number of courts to render per venue. Venues only have one court today —
-// bump this (or make it data-driven) when the backend adds a `courts` field.
-const COURTS_PER_VENUE = 1
-
-// ---- helpers ----------------------------------------------------------------
-
-const DAY_KEY_PAIRS: [string, string][] = [
-  ["sun", "sunday"],
-  ["mon", "monday"],
-  ["tue", "tuesday"],
-  ["wed", "wednesday"],
-  ["thu", "thursday"],
-  ["fri", "friday"],
-  ["sat", "saturday"],
-]
-
-function resolveDay(oh: OperatingHours | undefined, weekdayIdx: number): DayHours | undefined {
-  if (!oh) return undefined
-  const [short, long] = DAY_KEY_PAIRS[weekdayIdx]
-  const hours = oh as unknown as Record<string, DayHours | undefined>
-  return hours[short] ?? hours[long]
-}
+// -------- utilities ---------------------------------------------------------
 
 function toISODate(d: Date): string {
   const y = d.getFullYear()
@@ -73,229 +53,19 @@ function toISODate(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0")
   return `${y}-${m}-${day}`
 }
-
 function addDays(d: Date, n: number): Date {
   const nd = new Date(d)
   nd.setDate(nd.getDate() + n)
   return nd
 }
 
-function parseTime(hhmm: string | undefined): number | null {
-  if (!hhmm) return null
-  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm)
-  if (!m) return null
-  const h = Number(m[1]), min = Number(m[2])
-  if (h < 0 || h > 23 || min < 0 || min > 59) return null
-  return h * 60 + min
-}
+// ---------------------------------------------------------------------------
+// TimelinePage — "Clean" Lanes variant. The data/query layer (venues, bookings,
+// manual-booking POST) is unchanged from the previous grid version. Only the
+// shell + rendering switched to the clean redesign's visual language.
+// ---------------------------------------------------------------------------
 
-function formatMinutes(mins: number): string {
-  // Normalize into 0-24h for display; the timeline uses an extended frame
-  // (up to ~48h) for overnight sessions, so a raw minute value may exceed 1440.
-  const normalized = ((mins % (24 * 60)) + 24 * 60) % (24 * 60)
-  const h = Math.floor(normalized / 60)
-  const m = normalized % 60
-  const suffix = h >= 12 ? "PM" : "AM"
-  const h12 = ((h + 11) % 12) + 1
-  return `${h12}:${m.toString().padStart(2, "0")} ${suffix}`
-}
-
-function formatHour(mins: number): string {
-  const normalized = ((mins % (24 * 60)) + 24 * 60) % (24 * 60)
-  const h = Math.floor(normalized / 60)
-  const m = normalized % 60
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
-}
-
-// ---- grid types -------------------------------------------------------------
-
-/** The timeline grid is measured in 30-minute slots. */
-const SLOT_MIN = 30
-
-type SlotState =
-  | "open"
-  | "booked"
-  | "pending"
-  | "pending_payment"
-  | "pending_review"
-  | "completed"
-  | "no_show"
-  | "cancelled"
-  | "blocked"
-  | "spanned"
-
-/** States that represent a "hold" (awaiting something) — used for summary counts. */
-const HOLD_STATES: SlotState[] = ["pending", "pending_payment", "pending_review"]
-
-interface HourCell {
-  /** Slot start offset in minutes from midnight (multiples of SLOT_MIN) */
-  startMin: number
-  state: SlotState
-  /** Number of SLOT_MIN cells this booking spans (1 = 30 min, 2 = 1 h, 3 = 1 h 30, 4 = 2 h) */
-  span?: number
-  booking?: Booking
-}
-
-/**
- * Build one row's cells for a given court. Bookings are pre-assigned to courts.
- * Each cell represents one SLOT_MIN (30-minute) bucket.
- */
-function buildCourtRow({
-  operatingHours,
-  weekdayIdx,
-  bookings,
-  now,
-  isToday,
-  isPastDate,
-}: {
-  operatingHours?: OperatingHours
-  weekdayIdx: number
-  bookings: Booking[]
-  now: Date
-  isToday: boolean
-  isPastDate: boolean
-}): { cells: HourCell[]; startHour: number; endHour: number } {
-  const dh = resolveDay(operatingHours, weekdayIdx)
-  if (!dh || dh.closed) return { cells: [], startHour: 0, endHour: 0 }
-  const start = parseTime(dh.open)
-  const end = parseTime(dh.close)
-  if (start == null || end == null) return { cells: [], startHour: 0, endHour: 0 }
-  // Overnight: when close <= open the venue crosses midnight. We work in an
-  // extended frame where minutes can exceed 24h — the loop, the header, and
-  // the booking overlap check all use this frame; display helpers mod by 24h.
-  const isOvernight = end <= start
-  const startHour = Math.floor(start / 60)
-  const endExtended = isOvernight ? end + 24 * 60 : end
-  const endHour = Math.ceil(endExtended / 60)
-
-  // Normalize "now" into the same extended frame if the user is viewing a
-  // day whose overnight session wraps past midnight and the current clock
-  // time is already past midnight but inside the session.
-  const rawNowMin = now.getHours() * 60 + now.getMinutes()
-  const nowInFrame = isOvernight && rawNowMin < start ? rawNowMin + 24 * 60 : rawNowMin
-  const nowMin = isToday ? nowInFrame : -1
-  const cells: HourCell[] = []
-
-  // Iterate every SLOT_MIN bucket between startHour and endHour
-  const firstSlot = startHour * 60
-  const lastSlot = endHour * 60
-  for (let slotStart = firstSlot; slotStart < lastSlot; slotStart += SLOT_MIN) {
-    const slotEnd = slotStart + SLOT_MIN
-    let state: SlotState = "open"
-    if (isPastDate) state = "blocked"
-    else if (isToday && slotEnd <= nowMin) state = "blocked"
-
-    let booking: Booking | undefined
-    for (const b of bookings) {
-      let bStart = parseTime(b.startTime)
-      if (bStart == null) continue
-      // Bookings that start after midnight on an overnight session are
-      // stored with a small start time (e.g. 01:00). Shift them into the
-      // extended frame so they overlap the late slots correctly.
-      if (isOvernight && bStart < start) bStart += 24 * 60
-      const bEnd = bStart + (b.duration ?? 0)
-      if (slotStart < bEnd && slotEnd > bStart) {
-        booking = b
-        switch (b.status) {
-          case "pending":
-            state = "pending"
-            break
-          case "pending_payment":
-            state = "pending_payment"
-            break
-          case "pending_review":
-            state = "pending_review"
-            break
-          case "completed":
-            state = "completed"
-            break
-          case "no_show":
-            state = "no_show"
-            break
-          case "cancelled":
-            state = "cancelled"
-            break
-          case "confirmed":
-          default:
-            // Proof awaiting review can also live on a confirmed booking
-            state =
-              b.paymentProofStatus === "pending_review"
-                ? "pending_review"
-                : "booked"
-            break
-        }
-        break
-      }
-    }
-    cells.push({ startMin: slotStart, state, booking })
-  }
-
-  // Collapse consecutive cells belonging to the same booking id
-  const CELL_STATES_TO_COLLAPSE: SlotState[] = [
-    "booked",
-    "pending",
-    "pending_payment",
-    "pending_review",
-    "completed",
-    "no_show",
-    "cancelled",
-  ]
-  for (let i = 0; i < cells.length; i++) {
-    const c = cells[i]
-    if (!CELL_STATES_TO_COLLAPSE.includes(c.state) || !c.booking) continue
-    let span = 1
-    for (let j = i + 1; j < cells.length; j++) {
-      if (
-        CELL_STATES_TO_COLLAPSE.includes(cells[j].state) &&
-        cells[j].booking?.id === c.booking.id
-      ) {
-        cells[j].state = "spanned"
-        span += 1
-      } else {
-        break
-      }
-    }
-    c.span = span
-    i += span - 1
-  }
-
-  return { cells, startHour, endHour }
-}
-
-/** Greedy first-fit: assign each booking to the first court with no overlap. */
-function distributeBookingsToCourts(
-  bookings: Booking[],
-  numCourts: number
-): Booking[][] {
-  const courts: Booking[][] = Array.from({ length: numCourts }, () => [])
-  const sorted = [...bookings].sort((a, b) => {
-    const sa = parseTime(a.startTime) ?? 0
-    const sb = parseTime(b.startTime) ?? 0
-    return sa - sb
-  })
-  for (const b of sorted) {
-    const bStart = parseTime(b.startTime)
-    if (bStart == null) continue
-    const bEnd = bStart + (b.duration ?? 0)
-    let placed = false
-    for (let i = 0; i < numCourts; i++) {
-      const overlap = courts[i].some((x) => {
-        const xs = parseTime(x.startTime) ?? 0
-        const xe = xs + (x.duration ?? 0)
-        return bStart < xe && bEnd > xs
-      })
-      if (!overlap) {
-        courts[i].push(b)
-        placed = true
-        break
-      }
-    }
-    if (!placed) courts[0].push(b) // overflow into court 1
-  }
-  return courts
-}
-
-// ---- page -------------------------------------------------------------------
+type FilterId = "all" | StatusGroup
 
 export default function TimelinePage() {
   const { t, lang } = useT()
@@ -305,11 +75,15 @@ export default function TimelinePage() {
   const navigate = useNavigate()
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
   const [selectedId, setSelectedId] = useState<string>("")
-  const [assignOpen, setAssignOpen] = useState(false)
-  const [assignPreset, setAssignPreset] = useState<{
+  const [draftOpen, setDraftOpen] = useState(false)
+  const [draftPreset, setDraftPreset] = useState<{
     startMin?: number
-    courtIndex?: number
+    duration?: number
+    sport?: string
+    pitchId?: string
   } | null>(null)
+  const [drawerBooking, setDrawerBooking] = useState<Booking | null>(null)
+  const [filter, setFilter] = useState<FilterId>("all")
 
   const { data: venuesData, isLoading: venuesLoading } = useQuery({
     queryKey: ["timeline-venues", ownerFilter],
@@ -323,12 +97,11 @@ export default function TimelinePage() {
       : venues[0]?.id) ?? ""
   const selectedVenue = venues.find((v) => v.id === effectiveId)
 
-  const now = new Date()
   const iso = toISODate(selectedDate)
+  const now = new Date()
   const todayIso = toISODate(now)
   const isToday = iso === todayIso
   const isPastDate = iso < todayIso
-  const weekdayIdx = selectedDate.getDay()
 
   const { data: bookingsData, isLoading: bookingsLoading } = useQuery({
     queryKey: ["timeline-bookings", effectiveId, iso],
@@ -341,749 +114,459 @@ export default function TimelinePage() {
     [bookingsData]
   )
 
-  // Distribute bookings into N courts
-  const courtsBookings = useMemo(
-    () => distributeBookingsToCourts(bookings, COURTS_PER_VENUE),
-    [bookings]
-  )
+  // Group counts for the filter pills
+  const counts = useMemo(() => {
+    const g: Record<FilterId, number> = {
+      all: bookings.length,
+      confirmed: 0,
+      hold: 0,
+      done: 0,
+      issue: 0,
+      open: 0,
+      blocked: 0,
+    }
+    for (const b of bookings) {
+      const status = renderStatusFor(b)
+      const group = STATUS_META[status]?.group
+      if (group && group !== "open" && group !== "blocked") g[group]++
+    }
+    return g
+  }, [bookings])
 
-  // Build one row per court
-  const courtRows = useMemo(() => {
-    return courtsBookings.map((bs) =>
-      buildCourtRow({
-        operatingHours: selectedVenue?.operatingHours,
-        weekdayIdx,
-        bookings: bs,
-        now,
-        isToday,
-        isPastDate,
-      })
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courtsBookings, selectedVenue?.operatingHours, weekdayIdx, iso])
+  // Day revenue (exclude cancelled / no-show)
+  const revenue = useMemo(() => {
+    let sum = 0
+    for (const b of bookings) {
+      if (b.status === "cancelled" || b.status === "no_show") continue
+      sum += b.totalAmount ?? b.amount ?? 0
+    }
+    return sum
+  }, [bookings])
 
-  const firstRow = courtRows[0]
-  const startHour = firstRow?.startHour ?? 0
-  const endHour = firstRow?.endHour ?? 0
-  const hours = Array.from({ length: Math.max(0, endHour - startHour) }, (_, i) => startHour + i)
-  // One extra trailing label shows the closing-time boundary (e.g. 03:00 when
-  // hours are 17:00–03:00). No cell sits beneath it — just a marker.
-  const boundaryLabels = hours.length > 0 ? [...hours, endHour] : []
-  const isClosed = hours.length === 0
+  // Filter bookings by active pill
+  const visibleBookings = useMemo(() => {
+    if (filter === "all") return bookings
+    return bookings.filter((b) => {
+      const status = renderStatusFor(b)
+      return STATUS_META[status]?.group === filter
+    })
+  }, [bookings, filter])
 
   const locale = lang === "ar" ? "ar-JO" : "en-GB"
   const displayDate = new Date(iso + "T00:00:00")
-  const dayOffsetDays = Math.round(
-    (displayDate.getTime() - new Date(todayIso + "T00:00:00").getTime()) / 86400000
-  )
-  const dayLabel = (() => {
-    if (dayOffsetDays === 0) return t("today")
-    if (dayOffsetDays === 1) return t("tomorrow")
-    if (dayOffsetDays === -1) return t("yesterday")
-    return displayDate.toLocaleDateString(locale, { weekday: "long" })
-  })()
-  const dateMono = displayDate.toLocaleDateString(locale, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
+  const dateLabel = displayDate.toLocaleDateString(locale, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
   })
-
-  // Summary counts — aggregated across courts
-  let bookedCells = 0
-  let holdCells = 0
-  let completedCells = 0
-  let openCells = 0
-  let totalCells = 0
-  for (const row of courtRows) {
-    for (const c of row.cells) {
-      totalCells++
-      if (c.state === "booked") bookedCells += c.span ?? 1
-      else if (HOLD_STATES.includes(c.state)) holdCells += c.span ?? 1
-      else if (c.state === "completed") completedCells += c.span ?? 1
-      else if (c.state === "open") openCells++
-    }
-  }
-  // Utilization counts anything the slot-is-in-use: booked + hold + completed
-  const utilization = totalCells
-    ? Math.round(((bookedCells + holdCells + completedCells) / totalCells) * 100)
-    : 0
-  const dayRevenue = bookings.reduce(
-    (acc, b) => acc + (b.totalAmount ?? b.amount ?? 0),
-    0
-  )
 
   function goDay(delta: number) {
     setSelectedDate((d) => addDays(d, delta))
   }
 
+  const filterPills: Array<{ id: FilterId; label: string; color?: keyof typeof GROUP_META }> = [
+    { id: "all", label: t("filter_all") },
+    { id: "confirmed", label: t("group_confirmed"), color: "confirmed" },
+    { id: "hold", label: t("filter_needs_action"), color: "hold" },
+    { id: "done", label: t("filter_completed"), color: "done" },
+    { id: "issue", label: t("filter_issues"), color: "issue" },
+  ]
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="display text-2xl font-semibold tracking-tight text-ink">
-          {t("slot_timeline")}
-        </h1>
-        <p className="mt-1 text-sm text-ink-3">
-          {t("timeline_subtitle_all_courts")}
-        </p>
+    <div className="p-6 space-y-5">
+      {/* Hero header — big date + nav group | stat pills + new booking */}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="display text-[28px] md:text-[32px] font-semibold tracking-[-0.02em] text-[hsl(var(--ink))] leading-[1.1]">
+            {dateLabel}
+          </h1>
+          <div className="mt-2 flex items-center gap-2">
+            <NavGroup
+              onPrev={() => goDay(-1)}
+              onToday={() => setSelectedDate(new Date())}
+              onNext={() => goDay(1)}
+              isToday={isToday}
+              todayLabel={t("today")}
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
+          <StatPill label={t("bookings_label")} value={counts.all} />
+          {canManage && selectedVenue && (
+            <Button
+              size="sm"
+              className="h-9 gap-1.5 rounded-[10px] font-semibold"
+              onClick={() => {
+                setDraftPreset(null)
+                setDraftOpen(true)
+              }}
+              disabled={isPastDate}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {t("new_booking")}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Controls bar: venue select + date stepper + legend */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-card p-3.5 shadow-stadium-sm">
-        {/* Venue select */}
-        <Select
-          value={effectiveId || undefined}
-          onValueChange={(v) => setSelectedId(v)}
-          disabled={venuesLoading || venues.length === 0}
-        >
-          <SelectTrigger className="h-9 min-w-[200px] rounded-lg border-0 bg-surface-2 text-sm font-semibold text-ink focus:ring-1 focus:ring-primary">
-            <SelectValue placeholder={t("select_venue")} />
-          </SelectTrigger>
-          <SelectContent>
-            {venues.length === 0 && (
-              <div className="px-2 py-1.5 text-sm text-ink-3">
-                {t("no_venues_available")}
-              </div>
-            )}
-            {venues.map((v) => (
-              <SelectItem key={v.id} value={v.id}>
+      {/* Venue selector (kept: we support many venues) */}
+      {venues.length > 1 && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {venuesLoading && (
+            <span className="text-[11px] text-[hsl(var(--ink-3))]">…</span>
+          )}
+          {venues.map((v) => {
+            const active = v.id === effectiveId
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setSelectedId(v.id)}
+                className={cn(
+                  "inline-flex items-center h-8 rounded-full px-3.5 text-[12px] font-semibold transition-colors border",
+                  active
+                    ? "bg-[hsl(var(--brand))] text-white border-transparent"
+                    : "bg-card text-[hsl(var(--ink-2))] border-[hsl(var(--line))] hover:text-[hsl(var(--ink))]",
+                )}
+              >
                 {v.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Date stepper */}
-        <div className="flex items-center gap-1 rounded-lg bg-surface-2 p-1">
-          <button
-            type="button"
-            onClick={() => goDay(-1)}
-            aria-label={t("previous_day")}
-            className="rounded-md p-1.5 text-ink-2 transition-colors hover:bg-card"
-          >
-            <ChevronLeft className="h-3.5 w-3.5 rtl-flip" />
-          </button>
-          <div className="min-w-[150px] px-3 text-center">
-            <div className="text-[13px] font-semibold leading-tight text-ink">
-              {dayLabel}
-            </div>
-            <div className="mono text-[10px] text-ink-3">{dateMono}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => goDay(1)}
-            aria-label={t("next_day")}
-            className="rounded-md p-1.5 text-ink-2 transition-colors hover:bg-card"
-          >
-            <ChevronRight className="h-3.5 w-3.5 rtl-flip" />
-          </button>
+              </button>
+            )
+          })}
         </div>
+      )}
 
-        {!isToday && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 text-xs"
-            onClick={() => setSelectedDate(new Date())}
-          >
-            {t("today")}
-          </Button>
-        )}
-
-        {canManage && selectedVenue && (
-          <Button
-            size="sm"
-            className="h-8 gap-1 bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => {
-              setAssignPreset(null)
-              setAssignOpen(true)
-            }}
-            disabled={isPastDate || isClosed}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("add_manual_booking")}
-          </Button>
-        )}
-
-        <div className="flex-1" />
-
-        {/* Legend */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-ink-2">
-          <LegendSwatch variant="open" label={t("open")} />
-          <LegendSwatch variant="booked" label={t("status_confirmed")} />
-          <LegendSwatch variant="pending" label={t("status_pending")} />
-          <LegendSwatch variant="pending_payment" label={t("status_pending_payment")} />
-          <LegendSwatch variant="pending_review" label={t("status_pending_review")} />
-          <LegendSwatch variant="completed" label={t("status_completed")} />
-          <LegendSwatch variant="no_show" label={t("status_no_show")} />
-          <LegendSwatch variant="cancelled" label={t("status_cancelled")} />
-          <LegendSwatch variant="blocked" label={t("blocked")} />
+      {/* Filter pills + Day/Week segmented */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {filterPills.map((g) => {
+            const active = filter === g.id
+            const c = g.color ? colorFor(GROUP_META[g.color].color) : null
+            return (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => setFilter(g.id)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[12px] font-semibold transition-colors",
+                )}
+                style={
+                  active
+                    ? c
+                      ? { background: c.tint, color: c.ink, border: "none" }
+                      : { background: "hsl(var(--ink))", color: "#fff", border: "none" }
+                    : {
+                        background: "hsl(var(--card))",
+                        color: "hsl(var(--ink-2))",
+                        border: "1px solid hsl(var(--line))",
+                      }
+                }
+              >
+                {c && (
+                  <span
+                    aria-hidden
+                    className="inline-block rounded-full"
+                    style={{ width: 7, height: 7, background: c.bg }}
+                  />
+                )}
+                {g.label}
+                <span
+                  className="num text-[11px] font-bold"
+                  style={{ opacity: active ? 0.8 : 0.5 }}
+                >
+                  {counts[g.id]}
+                </span>
+              </button>
+            )
+          })}
         </div>
+        <Segmented
+          value="day"
+          onChange={() => {}}
+          options={[
+            { value: "day", label: lang === "ar" ? "يوم" : "Day" },
+            { value: "week", label: lang === "ar" ? "أسبوع" : "Week", disabled: true, title: "Coming soon" },
+          ]}
+        />
       </div>
 
       {/* Loading */}
       {(venuesLoading || bookingsLoading) && (
-        <div className="shim h-[240px] w-full rounded-2xl" />
+        <div className="h-[320px] w-full rounded-[16px] bg-[hsl(var(--surface-2))] animate-pulse" />
       )}
 
-      {/* Empty venues */}
+      {/* Empty */}
       {!venuesLoading && venues.length === 0 && (
-        <div className="rounded-2xl bg-card p-10 text-center shadow-stadium-sm">
-          <MapPin className="mx-auto mb-2 h-6 w-6 text-ink-3" />
-          <p className="text-sm text-ink-2">{t("no_venues_available")}</p>
+        <div className="rounded-[16px] bg-card border border-[hsl(var(--line))] p-10 text-center shadow-sm-stadium">
+          <CalendarDays className="mx-auto mb-2 h-6 w-6 text-[hsl(var(--ink-3))]" />
+          <p className="text-sm text-[hsl(var(--ink-2))]">{t("no_venues_available")}</p>
         </div>
       )}
 
-      {/* Closed venue for the day */}
-      {!bookingsLoading && selectedVenue && isClosed && (
-        <div className="rounded-2xl bg-card p-10 text-center shadow-stadium-sm">
-          <p className="text-sm text-ink-2">{t("venue_closed_day")}</p>
-        </div>
+      {/* Lanes timeline */}
+      {!venuesLoading && !bookingsLoading && selectedVenue && (
+        <LanesTimeline
+          venue={selectedVenue}
+          bookings={visibleBookings}
+          date={selectedDate}
+          canManage={canManage && !isPastDate}
+          onCreate={(args) => {
+            setDraftPreset({
+              startMin: args.startMin,
+              duration: args.duration,
+              sport: args.sport,
+              pitchId: args.pitchId,
+            })
+            setDraftOpen(true)
+          }}
+          onOpenBooking={(b) => setDrawerBooking(b)}
+        />
       )}
 
-      {/* Grid */}
-      {!bookingsLoading && selectedVenue && !isClosed && (
-        <div className="rounded-2xl bg-card p-4 shadow-stadium-sm">
-          <div className="overflow-x-auto">
-            <div
-              className="grid min-w-[1000px] gap-1"
-              style={{
-                // Two 30-min columns per hour, plus a narrow trailing column
-                // that only holds the closing-time boundary label.
-                gridTemplateColumns: `repeat(${hours.length * 2}, minmax(34px, 1fr)) 44px`,
-              }}
-            >
-              {/* Hour header row — each label spans 2 slot columns, except
-                  the final closing-time boundary which spans 1 narrow col.
-                  Hours past 24 (overnight sessions) are rendered as their
-                  wall-clock equivalent (25 → 01, 26 → 02, …). */}
-              {boundaryLabels.map((h, i) => {
-                const isClose = i === boundaryLabels.length - 1
-                return (
-                  <div
-                    key={`hdr-${i}`}
-                    className={cn(
-                      "mono pb-2 text-[10px] font-semibold text-ink-3",
-                      isClose ? "px-1 text-start" : "text-center"
-                    )}
-                    style={{ gridColumn: isClose ? "span 1" : "span 2" }}
-                  >
-                    {String(h % 24).padStart(2, "0")}:00
-                  </div>
-                )
-              })}
-
-              {/* One row per court */}
-              {courtRows.map((row, courtIdx) => (
-                <CourtRowCells
-                  key={courtIdx}
-                  cells={row.cells}
-                  canManage={canManage}
-                  t={t}
-                  onOpenManual={(startMin) => {
-                    setAssignPreset({ startMin, courtIndex: courtIdx })
-                    setAssignOpen(true)
-                  }}
-                  onGoToBookings={() =>
-                    navigate(
-                      `/bookings?venue=${effectiveId}&from=${iso}&to=${iso}`
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Summary strip */}
-      {!bookingsLoading && selectedVenue && !isClosed && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <SummaryCard
-            icon={<BarChart3 className="h-4 w-4" />}
-            label={t("utilization")}
-            value={`${utilization}%`}
-            tone="brand"
-          />
-          <SummaryCard
-            icon={<Plus className="h-4 w-4" />}
-            label={t("open_slots")}
-            value={openCells}
-            tone="brand"
-          />
-          <SummaryCard
-            icon={<Clock className="h-4 w-4" />}
-            label={t("holds")}
-            value={holdCells}
-            tone="amber"
-          />
-          <SummaryCard
-            icon={<Coins className="h-4 w-4" />}
-            label={t("day_revenue")}
-            value={formatCurrency(dayRevenue)}
-            tone="brand"
-          />
-        </div>
-      )}
-
-      {/* Assign booking dialog */}
-      {assignOpen && selectedVenue && (
+      {/* Draft / assign booking dialog */}
+      {draftOpen && selectedVenue && (
         <AssignBookingDialog
           venueId={selectedVenue.id}
           date={iso}
-          preset={assignPreset}
+          preset={draftPreset}
           sports={selectedVenue.sports}
           pricePerHour={selectedVenue.pricePerHour}
-          courtRows={courtRows}
-          onClose={() => setAssignOpen(false)}
+          pitches={selectedVenue.pitches ?? []}
+          minDuration={selectedVenue.minBookingDuration}
+          maxDuration={selectedVenue.maxBookingDuration}
+          onClose={() => setDraftOpen(false)}
+        />
+      )}
+
+      {/* Booking detail drawer */}
+      {drawerBooking && (
+        <BookingDrawer
+          booking={drawerBooking}
+          onClose={() => setDrawerBooking(null)}
+          onView={() => {
+            const id = drawerBooking.id
+            navigate(`/bookings?venue=${effectiveId}&from=${iso}&to=${iso}&highlight=${id}`)
+          }}
+          onCompleted={() => {
+            setDrawerBooking(null)
+          }}
         />
       )}
     </div>
   )
 }
 
-// ---- court row --------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// NavGroup — prev / Today / next as a single bordered pill
+// ---------------------------------------------------------------------------
 
-function CourtRowCells({
-  cells,
-  canManage,
-  t,
-  onOpenManual,
-  onGoToBookings,
+function NavGroup({
+  onPrev,
+  onToday,
+  onNext,
+  isToday,
+  todayLabel,
 }: {
-  cells: HourCell[]
-  canManage: boolean
-  t: (k: TranslationKey) => string
-  onOpenManual: (startMin: number) => void
-  onGoToBookings: () => void
+  onPrev: () => void
+  onToday: () => void
+  onNext: () => void
+  isToday: boolean
+  todayLabel: string
 }) {
   return (
-    <>
-      {cells.map((c, i) => {
-        if (c.state === "spanned") return null
-        return (
-          <TimelineCell
-            key={`${c.startMin}-${i}`}
-            cell={c}
-            canManage={canManage}
-            t={t}
-            onOpenManual={onOpenManual}
-            onGoToBookings={onGoToBookings}
-          />
-        )
-      })}
-      {/* Spacer for the closing-time column at the end of each court row */}
-      <div />
-    </>
+    <div className="inline-flex bg-card border border-[hsl(var(--line))] rounded-[10px] overflow-hidden">
+      <NavBtn onClick={onPrev} ariaLabel="previous day">
+        <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" />
+      </NavBtn>
+      <NavBtn onClick={onToday} wide highlight={!isToday}>
+        {todayLabel}
+      </NavBtn>
+      <NavBtn onClick={onNext} ariaLabel="next day">
+        <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
+      </NavBtn>
+    </div>
   )
 }
 
-// ---- timeline cell ----------------------------------------------------------
-
-function TimelineCell({
-  cell,
-  canManage,
-  t,
-  onOpenManual,
-  onGoToBookings,
+function NavBtn({
+  children,
+  onClick,
+  wide,
+  highlight,
+  ariaLabel,
 }: {
-  cell: HourCell
-  canManage: boolean
-  t: (k: TranslationKey) => string
-  onOpenManual: (startMin: number) => void
-  onGoToBookings: () => void
+  children: React.ReactNode
+  onClick: () => void
+  wide?: boolean
+  highlight?: boolean
+  ariaLabel?: string
 }) {
-  const span = cell.span ?? 1
-  const startMin = cell.startMin
-  const endMin = startMin + span * SLOT_MIN
-  const hourLabel = formatHour(startMin)
-  const rangeLabel = `${formatHour(startMin)}–${formatHour(endMin)}`
-
-  // BOOKED (green)
-  if (cell.state === "booked" && cell.booking) {
-    return (
-      <div style={{ gridColumn: `span ${span}` }}>
-        <BookingPopover
-          booking={cell.booking}
-          startMin={startMin}
-          endMin={endMin}
-          onGoToBookings={onGoToBookings}
-        >
-          <button
-            type="button"
-            className="flex h-11 w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-md bg-primary px-2 text-[11px] font-semibold text-primary-foreground transition-transform hover:scale-[1.01]"
-          >
-            <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-lime shadow-[0_0_6px_hsl(var(--lime))]" />
-            <div className="min-w-0 flex-1 overflow-hidden text-start">
-              <div className="truncate">{cell.booking.player.name}</div>
-              {span >= 3 && (
-                <div className="mono text-[9px] font-medium opacity-85">
-                  {rangeLabel}
-                </div>
-              )}
-            </div>
-          </button>
-        </BookingPopover>
-      </div>
-    )
-  }
-
-  // PENDING (amber) — awaiting general confirmation
-  if (cell.state === "pending" && cell.booking) {
-    return (
-      <div style={{ gridColumn: `span ${span}` }}>
-        <BookingPopover
-          booking={cell.booking}
-          startMin={startMin}
-          endMin={endMin}
-          onGoToBookings={onGoToBookings}
-        >
-          <button
-            type="button"
-            className="flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-md bg-amber-tint px-2 text-[11px] font-semibold text-amber-ink transition-transform hover:scale-[1.01]"
-          >
-            <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-amber" />
-            <span className="truncate">{t("status_pending")}</span>
-          </button>
-        </BookingPopover>
-      </div>
-    )
-  }
-
-  // PENDING_PAYMENT (sky) — waiting for money
-  if (cell.state === "pending_payment" && cell.booking) {
-    return (
-      <div style={{ gridColumn: `span ${span}` }}>
-        <BookingPopover
-          booking={cell.booking}
-          startMin={startMin}
-          endMin={endMin}
-          onGoToBookings={onGoToBookings}
-        >
-          <button
-            type="button"
-            className="flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-md bg-sky-tint px-2 text-[11px] font-semibold text-sky-ink transition-transform hover:scale-[1.01]"
-          >
-            <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-sky" />
-            <span className="truncate">{t("status_pending_payment")}</span>
-          </button>
-        </BookingPopover>
-      </div>
-    )
-  }
-
-  // PENDING_REVIEW (violet) — proof awaiting review
-  if (cell.state === "pending_review" && cell.booking) {
-    return (
-      <div style={{ gridColumn: `span ${span}` }}>
-        <BookingPopover
-          booking={cell.booking}
-          startMin={startMin}
-          endMin={endMin}
-          onGoToBookings={onGoToBookings}
-        >
-          <button
-            type="button"
-            className="flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-md bg-violet-tint px-2 text-[11px] font-semibold text-violet-ink transition-transform hover:scale-[1.01]"
-          >
-            <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-violet" />
-            <span className="truncate">{t("status_pending_review")}</span>
-          </button>
-        </BookingPopover>
-      </div>
-    )
-  }
-
-  // COMPLETED (indigo)
-  if (cell.state === "completed" && cell.booking) {
-    return (
-      <div style={{ gridColumn: `span ${span}` }}>
-        <BookingPopover
-          booking={cell.booking}
-          startMin={startMin}
-          endMin={endMin}
-          onGoToBookings={onGoToBookings}
-        >
-          <button
-            type="button"
-            className="flex h-11 w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-md bg-indigo-tint px-2 text-[11px] font-semibold text-indigo-ink transition-transform hover:scale-[1.01]"
-          >
-            <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-indigo" />
-            <div className="min-w-0 flex-1 overflow-hidden text-start">
-              <div className="truncate">{cell.booking.player.name}</div>
-              {span >= 3 && (
-                <div className="mono text-[9px] font-medium opacity-80">
-                  {t("status_completed")}
-                </div>
-              )}
-            </div>
-          </button>
-        </BookingPopover>
-      </div>
-    )
-  }
-
-  // NO-SHOW (rose)
-  if (cell.state === "no_show" && cell.booking) {
-    return (
-      <div style={{ gridColumn: `span ${span}` }}>
-        <BookingPopover
-          booking={cell.booking}
-          startMin={startMin}
-          endMin={endMin}
-          onGoToBookings={onGoToBookings}
-        >
-          <button
-            type="button"
-            className="flex h-11 w-full cursor-pointer items-center gap-1.5 overflow-hidden rounded-md bg-rose-tint px-2 text-[11px] font-semibold text-rose-ink transition-transform hover:scale-[1.01]"
-          >
-            <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-rose" />
-            <div className="min-w-0 flex-1 overflow-hidden text-start">
-              <div className="truncate">{cell.booking.player.name}</div>
-              {span >= 3 && (
-                <div className="mono text-[9px] font-medium opacity-80">
-                  {t("status_no_show")}
-                </div>
-              )}
-            </div>
-          </button>
-        </BookingPopover>
-      </div>
-    )
-  }
-
-  // CANCELLED (slate with rose accent + strikethrough)
-  if (cell.state === "cancelled" && cell.booking) {
-    return (
-      <div style={{ gridColumn: `span ${span}` }}>
-        <BookingPopover
-          booking={cell.booking}
-          startMin={startMin}
-          endMin={endMin}
-          onGoToBookings={onGoToBookings}
-        >
-          <button
-            type="button"
-            className="flex h-11 w-full cursor-pointer items-center justify-center gap-1.5 overflow-hidden rounded-md border border-rose/40 bg-surface-2 px-2 text-[11px] font-semibold text-rose transition-transform hover:scale-[1.01]"
-          >
-            <span className="h-[6px] w-[6px] shrink-0 rounded-full bg-rose opacity-70" />
-            <span className="truncate line-through">
-              {cell.booking.player.name}
-            </span>
-          </button>
-        </BookingPopover>
-      </div>
-    )
-  }
-
-  // OPEN (dashed +)
-  if (cell.state === "open") {
-    const cls = cn(
-      "flex h-11 items-center justify-center rounded-md border border-dashed border-line-strong bg-card text-[14px] text-ink-3 opacity-50",
-      canManage &&
-        "cursor-pointer transition-colors hover:border-primary/60 hover:bg-primary/5 hover:text-primary hover:opacity-100"
-    )
-    return (
-      <button
-        type="button"
-        className={cls}
-        onClick={canManage ? () => onOpenManual(cell.startMin) : undefined}
-        aria-label={`Open ${hourLabel}`}
-        disabled={!canManage}
-      >
-        +
-      </button>
-    )
-  }
-
-  // BLOCKED (past / closed)
   return (
-    <div
-      className="h-11 rounded-md bg-surface-3 text-ink-3 [background-image:repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(0,0,0,0.06)_4px,rgba(0,0,0,0.06)_5px)]"
-      aria-label="Blocked"
-    />
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className={cn(
+        "inline-flex items-center justify-center text-[12px] font-semibold bg-transparent border-0 border-s border-[hsl(var(--line))] first:border-s-0 text-[hsl(var(--ink-2))] hover:bg-[hsl(var(--surface-2))]",
+        wide ? "h-[34px] px-3.5" : "h-[34px] w-[34px]",
+        highlight && "text-[hsl(var(--ink))]",
+      )}
+    >
+      {children}
+    </button>
   )
 }
 
-// ---- sub-components ---------------------------------------------------------
+// ---------------------------------------------------------------------------
+// StatPill — small two-line KPI tile for the header
+// ---------------------------------------------------------------------------
 
-type LegendVariant =
-  | "open"
-  | "booked"
-  | "pending"
-  | "pending_payment"
-  | "pending_review"
-  | "completed"
-  | "no_show"
-  | "cancelled"
-  | "blocked"
-
-function LegendSwatch({
-  variant,
-  label,
-}: {
-  variant: LegendVariant
-  label: string
-}) {
-  const baseCls = "inline-block h-3 w-3 rounded-[3px] border"
-
-  if (variant === "cancelled") {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className={cn(baseCls, "border-rose/50 bg-surface-2 text-rose")}
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, transparent 38%, currentColor 38%, currentColor 62%, transparent 62%)",
-          }}
-        />
-        <span>{label}</span>
-      </span>
-    )
-  }
-
-  if (variant === "blocked") {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <span
-          className={cn(baseCls, "border-transparent bg-surface-3 text-ink-3")}
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(45deg, transparent 0, transparent 3px, currentColor 3px, currentColor 4px)",
-            opacity: 0.7,
-          }}
-        />
-        <span>{label}</span>
-      </span>
-    )
-  }
-
-  const cls = cn(
-    baseCls,
-    variant === "open" && "border-dashed border-line-strong bg-card",
-    variant === "booked" && "border-transparent bg-primary",
-    variant === "pending" && "border-transparent bg-amber",
-    variant === "pending_payment" && "border-transparent bg-sky",
-    variant === "pending_review" && "border-transparent bg-violet",
-    variant === "completed" && "border-transparent bg-indigo",
-    variant === "no_show" && "border-transparent bg-rose"
-  )
+function StatPill({ label, value }: { label: string; value: string | number }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={cls} />
-      <span>{label}</span>
-    </span>
-  )
-}
-
-function SummaryCard({
-  icon,
-  label,
-  value,
-  tone = "brand",
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string | number
-  tone?: "brand" | "amber" | "rose" | "indigo"
-}) {
-  const toneCls = {
-    brand: "bg-brand-tint text-brand-ink",
-    amber: "bg-amber-tint text-amber-ink",
-    rose: "bg-rose-tint text-rose-ink",
-    indigo: "bg-indigo-tint text-indigo-ink",
-  }[tone]
-  return (
-    <div className="flex items-center gap-3 rounded-2xl bg-card px-4 py-3.5 shadow-stadium-sm">
-      <div
-        className={cn(
-          "flex h-9 w-9 flex-none items-center justify-center rounded-lg",
-          toneCls
-        )}
-      >
-        {icon}
+    <div className="bg-card border border-[hsl(var(--line))] rounded-[10px] px-3.5 py-2 leading-tight">
+      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-[hsl(var(--ink-3))]">
+        {label}
       </div>
-      <div className="min-w-0">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
-          {label}
-        </div>
-        <div className="display num text-[20px] font-semibold leading-tight text-ink">
-          {value}
-        </div>
+      <div className="num display text-[17px] font-bold text-[hsl(var(--ink))] mt-0.5 whitespace-nowrap">
+        {value}
       </div>
     </div>
   )
 }
 
-function BookingPopover({
+// ---------------------------------------------------------------------------
+// BookingDrawer — right side sheet for a selected booking
+// ---------------------------------------------------------------------------
+
+function BookingDrawer({
   booking,
-  startMin,
-  endMin,
-  onGoToBookings,
-  children,
+  onClose,
+  onView,
+  onCompleted,
 }: {
   booking: Booking
-  startMin: number
-  endMin: number
-  onGoToBookings: () => void
-  children: React.ReactNode
+  onClose: () => void
+  onView: () => void
+  onCompleted?: () => void
 }) {
   const { t } = useT()
+  const qc = useQueryClient()
+  const startMin = parseHHMM(booking.startTime)
+  const endMin = startMin + (booking.duration ?? 0)
+
+  const complete = useMutation({
+    mutationFn: () => api.patch(`/bookings/${booking.id}/complete`),
+    onSuccess: () => {
+      toast.success(t("mark_completed"))
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["venue-slots"] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      onCompleted?.()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? t("manual_booking_failed"))
+    },
+  })
+
+  const cancel = useMutation({
+    mutationFn: () => api.patch(`/bookings/${booking.id}/cancel`),
+    onSuccess: () => {
+      toast.success(t("status_cancelled"))
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["venue-slots"] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      onClose()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? t("manual_booking_failed"))
+    },
+  })
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>{children}</PopoverTrigger>
-      <PopoverContent className="w-72 space-y-3 p-4" align="center">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold text-ink">{booking.player.name}</p>
-            <p className="mono text-[11px] text-ink-3">
-              {formatMinutes(startMin)} — {formatMinutes(endMin)}
-            </p>
+    <Sheet open onOpenChange={(v) => !v && onClose()}>
+      <SheetContent side="right" className="w-[420px] sm:max-w-[420px]">
+        <SheetHeader>
+          <SheetTitle className="display tracking-[-0.02em]">
+            {booking.player?.name ?? "—"}
+          </SheetTitle>
+        </SheetHeader>
+        <div className="space-y-4 mt-4">
+          <div className="flex items-center justify-between">
+            <StatusBadge status={booking.status} />
+            <span className="mono text-[11.5px] text-[hsl(var(--ink-3))]">
+              {fmtRange(startMin, endMin)}
+            </span>
           </div>
-          <StatusBadge status={booking.status} />
+          <div className="hair" />
+          <dl className="grid grid-cols-2 gap-3 text-[12.5px]">
+            <InfoCell label={t("sport")} value={<span className="capitalize">{booking.sport}</span>} />
+            <InfoCell label={t("duration")} value={`${booking.duration} min`} />
+            <InfoCell label={t("amount")} value={formatCurrency(booking.totalAmount ?? booking.amount)} />
+            {booking.paymentMethod && (
+              <InfoCell label={t("payment_method")} value={<span className="uppercase">{booking.paymentMethod}</span>} />
+            )}
+            {booking.pitchSize && (
+              <InfoCell label={t("pitch_size") ?? "Size"} value={`${booking.pitchSize}-aside`} />
+            )}
+          </dl>
+          <div className="hair" />
+          <div className="space-y-2">
+            <Button size="sm" variant="outline" className="w-full" onClick={onView}>
+              {t("view_drawer")}
+            </Button>
+            {booking.status === "confirmed" && (
+              <Button
+                size="sm"
+                className="w-full gap-1"
+                onClick={() => complete.mutate()}
+                disabled={complete.isPending}
+              >
+                {complete.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : null}
+                {t("mark_completed")}
+              </Button>
+            )}
+            {["pending", "pending_payment", "pending_review", "confirmed"].includes(
+              booking.status,
+            ) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="w-full text-[hsl(var(--rose-ink))] gap-1"
+                onClick={() => cancel.mutate()}
+                disabled={cancel.isPending}
+              >
+                {cancel.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : null}
+                {t("cancel")}
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="hair" />
-        <dl className="space-y-1.5 text-xs">
-          <div className="flex justify-between">
-            <dt className="text-ink-3">{t("sport")}</dt>
-            <dd className="font-medium capitalize text-ink">{booking.sport}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-ink-3">{t("amount")}</dt>
-            <dd className="num mono font-semibold text-ink">
-              {formatCurrency(booking.totalAmount ?? booking.amount)}
-            </dd>
-          </div>
-          {booking.paymentMethod && (
-            <div className="flex justify-between">
-              <dt className="text-ink-3">{t("payment_method")}</dt>
-              <dd className="font-medium uppercase text-ink">
-                {booking.paymentMethod}
-              </dd>
-            </div>
-          )}
-        </dl>
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={onGoToBookings}
-        >
-          {t("view_in_bookings")}
-          <ArrowRight className="ms-1.5 h-3.5 w-3.5 rtl-flip" />
-        </Button>
-      </PopoverContent>
-    </Popover>
+      </SheetContent>
+    </Sheet>
   )
 }
 
-// ---- Assign booking dialog --------------------------------------------------
-
-type CourtRow = {
-  cells: HourCell[]
-  startHour: number
-  endHour: number
+function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--ink-3))]">
+        {label}
+      </dt>
+      <dd className="font-medium text-[hsl(var(--ink))] mt-0.5">{value}</dd>
+    </div>
+  )
 }
+
+// ---------------------------------------------------------------------------
+// AssignBookingDialog — identical logic to the previous build. Lets the user
+// finalize the start/duration/sport/pitch/size drafted from drag-to-create
+// or from the "Add booking" button.
+// ---------------------------------------------------------------------------
 
 function AssignBookingDialog({
   venueId,
@@ -1091,53 +574,97 @@ function AssignBookingDialog({
   preset,
   sports,
   pricePerHour,
-  courtRows,
+  pitches,
+  minDuration,
+  maxDuration,
   onClose,
 }: {
   venueId: string
   date: string
-  preset: { startMin?: number; courtIndex?: number } | null
+  preset: {
+    startMin?: number
+    duration?: number
+    sport?: string
+    pitchId?: string
+  } | null
   sports?: string[]
   pricePerHour?: number
-  courtRows: CourtRow[]
+  pitches: Pitch[]
+  minDuration?: number
+  maxDuration?: number
   onClose: () => void
 }) {
   const { t } = useT()
   const qc = useQueryClient()
-
-  // Default preferred court: preset's court if provided, else 0
-  const initialCourt = preset?.courtIndex ?? 0
-  const [courtIndex, setCourtIndex] = useState<number>(initialCourt)
-
-  // For the selected court, compute the list of currently-open start minutes
-  const openStartsForCourt = useMemo(() => {
-    const row = courtRows[courtIndex]
-    if (!row) return []
-    return row.cells.filter((c) => c.state === "open").map((c) => c.startMin)
-  }, [courtRows, courtIndex])
-
-  const [startMin, setStartMin] = useState<number>(() => {
-    const ps = preset?.startMin
-    if (ps != null && openStartsForCourt.includes(ps)) return ps
-    return openStartsForCourt[0] ?? 9 * 60
-  })
-  const [duration, setDuration] = useState<number>(60)
-  const [sport, setSport] = useState<string>(sports?.[0] ?? "football")
+  const [sport, setSport] = useState<string>(preset?.sport ?? sports?.[0] ?? "football")
   const [playerName, setPlayerName] = useState("")
   const [notes, setNotes] = useState("")
 
-  const amount = pricePerHour ? (pricePerHour * duration) / 60 : null
+  const durationOptions = useMemo(() => {
+    const all = [30, 60, 90, 120]
+    const min = minDuration ?? 60
+    const max = maxDuration ?? 180
+    const filtered = all.filter((d) => d >= min && d <= max)
+    return filtered.length > 0 ? filtered : [min]
+  }, [minDuration, maxDuration])
+  const [durationChoice, setDurationChoice] = useState<number>(preset?.duration ?? 60)
+  const duration = durationOptions.includes(durationChoice)
+    ? durationChoice
+    : durationOptions[0]
+
+  const sportPitches = useMemo(
+    () => pitches.filter((p) => p.sport.toLowerCase() === sport.toLowerCase()),
+    [pitches, sport],
+  )
+  const [pitchIdChoice, setPitchIdChoice] = useState<string>(preset?.pitchId ?? "")
+  const pitchId =
+    pitchIdChoice && sportPitches.some((p) => p.id === pitchIdChoice)
+      ? pitchIdChoice
+      : sportPitches[0]?.id ?? ""
+  const selectedPitch = useMemo(
+    () => sportPitches.find((p) => p.id === pitchId) ?? null,
+    [sportPitches, pitchId],
+  )
+
+  const offeredSizes = useMemo(() => {
+    if (!selectedPitch || selectedPitch.sport.toLowerCase() !== "football") return []
+    const parent = selectedPitch.parentSize
+    if (!parent) return []
+    return [parent, ...(selectedPitch.subSizes ?? [])]
+  }, [selectedPitch])
+  const effectivePrices: Record<string, number> = useMemo(
+    () => selectedPitch?.sizePrices ?? {},
+    [selectedPitch],
+  )
+  const [pitchSizeChoice, setPitchSizeChoice] = useState<string | null>(null)
+  const pitchSize: string | null =
+    offeredSizes.length === 0
+      ? null
+      : pitchSizeChoice && offeredSizes.includes(pitchSizeChoice)
+        ? pitchSizeChoice
+        : offeredSizes[0]
+
+  const [startMin, setStartMin] = useState<number>(preset?.startMin ?? 9 * 60)
+
+  const amount = useMemo(() => {
+    const hours = duration / 60
+    if (pitchSize && effectivePrices[pitchSize] != null) {
+      return effectivePrices[pitchSize] * hours
+    }
+    const rate = selectedPitch?.pricePerHour ?? pricePerHour
+    return rate ? rate * hours : null
+  }, [pitchSize, effectivePrices, selectedPitch, pricePerHour, duration])
 
   const create = useMutation({
     mutationFn: async () => {
-      // Overnight sessions produce extended-frame start values (>= 1440);
-      // normalize to wall-clock before serializing.
-      const normalizedStart = ((startMin % (24 * 60)) + 24 * 60) % (24 * 60)
-      const startHH = String(Math.floor(normalizedStart / 60)).padStart(2, "0")
-      const startMM = String(normalizedStart % 60).padStart(2, "0")
-      const notePrefix = `[MANUAL] [Court ${courtIndex + 1}]`
+      const normalized = ((startMin % (24 * 60)) + 24 * 60) % (24 * 60)
+      const startHH = String(Math.floor(normalized / 60)).padStart(2, "0")
+      const startMM = String(normalized % 60).padStart(2, "0")
+      const notePrefix = `[MANUAL] [${sport}]`
       const walkIn = playerName ? ` Walk-in: ${playerName}.` : ""
       const extra = notes ? ` ${notes}` : ""
+      const pitchIdToSend =
+        pitchId && !pitchId.startsWith("legacy-") ? pitchId : undefined
       const res = await api.post("/bookings", {
         venueId,
         sport,
@@ -1147,13 +674,15 @@ function AssignBookingDialog({
         paymentMethod: "cliq",
         notes: `${notePrefix}${walkIn}${extra}`.trim(),
         isManual: true,
+        ...(pitchSize ? { pitchSize } : {}),
+        ...(pitchIdToSend ? { pitchId: pitchIdToSend } : {}),
       })
       return res.data
     },
     onSuccess: () => {
       toast.success(t("manual_booking_created"))
-      qc.invalidateQueries({ queryKey: ["timeline-bookings", venueId] })
-      qc.invalidateQueries({ queryKey: ["venue-slots", venueId] })
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["venue-slots"] })
       qc.invalidateQueries({ queryKey: ["bookings"] })
       onClose()
     },
@@ -1162,86 +691,64 @@ function AssignBookingDialog({
     },
   })
 
-  const handleSubmit = () => {
-    if (openStartsForCourt.length === 0) {
-      toast.error(t("no_open_slots"))
-      return
-    }
-    create.mutate()
-  }
-
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="display text-lg font-semibold tracking-tight">
-            {t("add_manual_booking")}
+          <DialogTitle className="display tracking-[-0.02em]">
+            {t("draft_review")}
           </DialogTitle>
         </DialogHeader>
-
         <div className="space-y-4 py-2">
-          <p className="text-xs text-ink-3">{t("manual_booking_hint")}</p>
-
-          {courtRows.length > 1 && (
-            <FieldLabel label={t("court")}>
-              <select
-                value={courtIndex}
-                onChange={(e) => {
-                  const idx = Number(e.target.value)
-                  setCourtIndex(idx)
-                  // reset start to first open on new court
-                  const row = courtRows[idx]
-                  const firstOpen = row?.cells.find((c) => c.state === "open")
-                  if (firstOpen) setStartMin(firstOpen.startMin)
-                }}
-                className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink focus:border-primary focus:outline-none"
-              >
-                {courtRows.map((_, i) => (
-                  <option key={i} value={i}>
-                    {t("court")} {i + 1}
-                  </option>
-                ))}
-              </select>
-            </FieldLabel>
-          )}
-
           <div className="grid grid-cols-2 gap-3">
-            <FieldLabel label={t("start_time")}>
-              <select
-                value={startMin}
-                onChange={(e) => setStartMin(Number(e.target.value))}
-                className="mono h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink focus:border-primary focus:outline-none"
-              >
-                {openStartsForCourt.length === 0 && (
-                  <option value={startMin}>—</option>
-                )}
-                {openStartsForCourt.map((m) => (
-                  <option key={m} value={m}>
-                    {formatHour(m)}
-                  </option>
-                ))}
-              </select>
-            </FieldLabel>
-
-            <FieldLabel label={t("duration")}>
+            <Field label={t("start_time")}>
+              <input
+                type="text"
+                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm"
+                value={fmt12(startMin)}
+                readOnly
+              />
+            </Field>
+            <Field label={t("duration")}>
               <select
                 value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="mono h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink focus:border-primary focus:outline-none"
+                onChange={(e) => setDurationChoice(Number(e.target.value))}
+                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
               >
-                <option value={30}>30 min</option>
-                <option value={60}>1 h</option>
-                <option value={90}>1 h 30</option>
-                <option value={120}>2 h</option>
+                {durationOptions.map((d) => (
+                  <option key={d} value={d}>
+                    {d === 30
+                      ? "30 min"
+                      : d === 60
+                        ? "1 h"
+                        : d === 90
+                          ? "1 h 30"
+                          : d === 120
+                            ? "2 h"
+                            : `${d} min`}
+                  </option>
+                ))}
               </select>
-            </FieldLabel>
+            </Field>
           </div>
 
-          <FieldLabel label={t("sport")}>
+          <Field label={t("start_time")}>
+            <input
+              type="time"
+              value={`${String(Math.floor(((startMin % 1440) + 1440) % 1440 / 60)).padStart(2, "0")}:${String(startMin % 60).padStart(2, "0")}`}
+              onChange={(e) => {
+                const [h, m] = e.target.value.split(":").map(Number)
+                setStartMin(h * 60 + m)
+              }}
+              className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+            />
+          </Field>
+
+          <Field label={t("sport")}>
             <select
               value={sport}
               onChange={(e) => setSport(e.target.value)}
-              className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm capitalize text-ink focus:border-primary focus:outline-none"
+              className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm capitalize text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
             >
               {(sports && sports.length > 0
                 ? sports
@@ -1252,53 +759,90 @@ function AssignBookingDialog({
                 </option>
               ))}
             </select>
-          </FieldLabel>
+          </Field>
 
-          <FieldLabel label={t("player_name")}>
+          {sportPitches.length > 1 && (
+            <Field label={t("pitch") ?? "Pitch"}>
+              <select
+                value={pitchId}
+                onChange={(e) => setPitchIdChoice(e.target.value)}
+                className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+              >
+                {sportPitches.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.parentSize ? ` · ${p.parentSize}-aside` : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          {offeredSizes.length > 1 && (
+            <Field label={t("pitch_size") ?? "Pitch size"}>
+              <select
+                value={pitchSize ?? ""}
+                onChange={(e) => setPitchSizeChoice(e.target.value)}
+                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+              >
+                {offeredSizes.map((s) => {
+                  const price = effectivePrices[s]
+                  return (
+                    <option key={s} value={s}>
+                      {s}-aside
+                      {price != null ? ` · ${formatCurrency(price)}/h` : ""}
+                    </option>
+                  )
+                })}
+              </select>
+            </Field>
+          )}
+
+          <Field label={t("player_name")}>
             <input
               type="text"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
               placeholder={t("player_name_placeholder")}
-              className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:outline-none"
+              className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] placeholder:text-[hsl(var(--ink-3))] focus:border-[hsl(var(--brand))] focus:outline-none"
             />
-          </FieldLabel>
+          </Field>
 
-          <FieldLabel label={t("notes")}>
+          <Field label={t("notes")}>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               placeholder={t("notes_placeholder")}
-              className="w-full rounded-md border border-line bg-card px-2 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:outline-none"
+              className="w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 py-1.5 text-sm text-[hsl(var(--ink))] placeholder:text-[hsl(var(--ink-3))] focus:border-[hsl(var(--brand))] focus:outline-none"
             />
-          </FieldLabel>
+          </Field>
 
           {amount != null && (
-            <div className="flex items-center justify-between rounded-lg bg-brand-tint px-3 py-2 text-sm">
-              <span className="text-brand-ink">{t("estimated_amount")}</span>
-              <span className="num mono font-semibold text-brand-ink">
+            <div className="flex items-center justify-between rounded-lg bg-[hsl(var(--brand-tint))] px-3 py-2 text-sm">
+              <span className="text-[hsl(var(--brand-ink))]">{t("estimated_amount")}</span>
+              <span className="mono font-semibold text-[hsl(var(--brand-ink))]">
                 {formatCurrency(amount)}
               </span>
             </div>
           )}
         </div>
-
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={onClose} disabled={create.isPending}>
+            <X className="h-3.5 w-3.5" />
             {t("cancel")}
           </Button>
           <Button
-            onClick={handleSubmit}
-            disabled={create.isPending || openStartsForCourt.length === 0}
+            onClick={() => create.mutate()}
+            disabled={create.isPending}
             className="gap-1"
           >
             {create.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Clock className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5" />
             )}
-            {t("create_booking")}
+            {t("draft_create")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1306,16 +850,10 @@ function AssignBookingDialog({
   )
 }
 
-function FieldLabel({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--ink-3))]">
         {label}
       </span>
       {children}

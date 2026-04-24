@@ -232,6 +232,40 @@
   }
   .pm-pulse { animation: pm-pulse 1.6s ease-in-out infinite; }
 
+  /* Stadium shadows — from design bundle theme.css */
+  .shadow-sm-stadium { box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06); }
+  .shadow-md-stadium { box-shadow: 0 2px 4px -2px rgba(16, 24, 40, 0.08), 0 4px 12px -4px rgba(16, 24, 40, 0.1); }
+  .shadow-lg-stadium { box-shadow: 0 12px 32px -12px rgba(16, 24, 40, 0.22), 0 4px 10px -4px rgba(16, 24, 40, 0.1); }
+  .dark .shadow-sm-stadium { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.35); }
+  .dark .shadow-md-stadium { box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.4), 0 4px 12px -4px rgba(0, 0, 0, 0.45); }
+  .dark .shadow-lg-stadium { box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6), 0 4px 10px -4px rgba(0, 0, 0, 0.45); }
+
+  /* Diagonal hatching — used on past-area overlay in the Lanes timeline */
+  .hatched {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 4px,
+      rgba(0, 0, 0, 0.05) 4px,
+      rgba(0, 0, 0, 0.05) 5px
+    );
+  }
+  .dark .hatched {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 4px,
+      rgba(255, 255, 255, 0.05) 4px,
+      rgba(255, 255, 255, 0.05) 5px
+    );
+  }
+
+  /* No-select during drag-to-create */
+  .no-select, .no-select * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+
   /* Skeleton shimmer */
   .shim { position: relative; overflow: hidden; background: hsl(var(--surface-2)); border-radius: 6px; }
   .shim::after {
