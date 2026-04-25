@@ -85,7 +85,15 @@ export function LanesTimeline({
 
   const pitches = useMemo(() => venue.pitches ?? [], [venue.pitches])
 
-  // Build per-pitch row (with lane assignments)
+  // Build per-pitch row (with lane assignments).
+  //
+  // Overnight tail handling: when the venue closes after midnight (e.g. Sat
+  // 09:00 -> Sun 03:00, frame 540..1620), bookings stored at wall-clock
+  // 02:00 belong to the SAME session day's overnight tail. parseHHMM
+  // returns 120, which is < frameStart=540 and would clip off the left
+  // edge. Bumping by 24h positions the block at minute 1560, which lands
+  // correctly at the right end of the frame.
+  const overnight = frameEnd > 24 * 60
   const rows: PitchRow[] = useMemo(() => {
     const out: PitchRow[] = []
     for (const pitch of pitches) {
@@ -96,12 +104,18 @@ export function LanesTimeline({
           // fallback: sport match (should not normally happen)
           return b.sport?.toLowerCase() === pitch.sport.toLowerCase()
         })
-        .map((b) => ({ ...bookingToLane(b), _orig: b }))
+        .map((b) => {
+          const lane = bookingToLane(b)
+          if (overnight && lane.startMin < frameStart) {
+            lane.startMin += 24 * 60
+          }
+          return { ...lane, _orig: b }
+        })
       const assignments = assignLanes(pitch, pitchBookings)
       out.push({ pitch, lanes: laneCount, assignments })
     }
     return out
-  }, [pitches, bookings])
+  }, [pitches, bookings, overnight, frameStart])
 
   // NOW line: only show if date is today and the time is inside the frame
   const now = new Date()
