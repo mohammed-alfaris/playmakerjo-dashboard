@@ -324,9 +324,11 @@ export function LanesTimeline({
                       )}
                     </div>
 
-                    {/* Body */}
+                    {/* Body. overflow-hidden keeps booking blocks that fall
+                        outside the [HOURS_START, HOURS_END] frame from
+                        bleeding left onto the label column. */}
                     <div
-                      className="relative flex-1 bg-card"
+                      className="relative flex-1 bg-card overflow-hidden"
                       style={{
                         minWidth: frameWidth,
                         height: rowHeight,
