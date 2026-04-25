@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import {
@@ -38,12 +38,14 @@ import {
   parseHHMM,
   fmt12,
   fmtRange,
+  hoursFor,
   renderStatusFor,
   STATUS_META,
   GROUP_META,
   colorFor,
   type StatusGroup,
 } from "@/lib/timelineDesign"
+import type { OperatingHours } from "@/lib/types"
 
 // -------- utilities ---------------------------------------------------------
 
@@ -329,12 +331,14 @@ export default function TimelinePage() {
         <AssignBookingDialog
           venueId={selectedVenue.id}
           date={iso}
+          bookingDate={selectedDate}
           preset={draftPreset}
           sports={selectedVenue.sports}
           pricePerHour={selectedVenue.pricePerHour}
           pitches={selectedVenue.pitches ?? []}
           minDuration={selectedVenue.minBookingDuration}
           maxDuration={selectedVenue.maxBookingDuration}
+          operatingHours={selectedVenue.operatingHours}
           onClose={() => setDraftOpen(false)}
         />
       )}
@@ -571,16 +575,19 @@ function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
 function AssignBookingDialog({
   venueId,
   date,
+  bookingDate,
   preset,
   sports,
   pricePerHour,
   pitches,
   minDuration,
   maxDuration,
+  operatingHours,
   onClose,
 }: {
   venueId: string
   date: string
+  bookingDate: Date
   preset: {
     startMin?: number
     duration?: number
@@ -592,6 +599,7 @@ function AssignBookingDialog({
   pitches: Pitch[]
   minDuration?: number
   maxDuration?: number
+  operatingHours?: OperatingHours
   onClose: () => void
 }) {
   const { t } = useT()
@@ -645,6 +653,39 @@ function AssignBookingDialog({
         : offeredSizes[0]
 
   const [startMin, setStartMin] = useState<number>(preset?.startMin ?? 9 * 60)
+
+  // Day's operating hours: pitch override wins, else venue. Returns null when closed.
+  const dayHours = useMemo(
+    () => hoursFor(selectedPitch?.operatingHours ?? operatingHours, bookingDate),
+    [selectedPitch, operatingHours, bookingDate],
+  )
+
+  // 30-min slot list within the day's open/close window. Latest start is
+  // `close - duration` so the booking always fits before close.
+  const startOptions = useMemo(() => {
+    if (!dayHours) return []
+    const open = parseHHMM(dayHours.open)
+    let close = parseHHMM(dayHours.close)
+    if (close <= open) close += 24 * 60 // overnight (e.g. open 18:00, close 02:00)
+    const last = close - duration
+    const out: number[] = []
+    for (let m = open; m <= last; m += 30) out.push(m)
+    return out
+  }, [dayHours, duration])
+
+  // Snap startMin to a valid 30-min slot whenever the available slots change
+  // (date, pitch, or duration changed). Avoids leaving the select on a value
+  // that no longer exists in the list.
+  useEffect(() => {
+    if (startOptions.length === 0) return
+    if (startOptions.includes(startMin)) return
+    const nearest = startOptions.reduce(
+      (best, m) => (Math.abs(m - startMin) < Math.abs(best - startMin) ? m : best),
+      startOptions[0],
+    )
+    setStartMin(nearest)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startOptions])
 
   const amount = useMemo(() => {
     const hours = duration / 60
@@ -702,12 +743,28 @@ function AssignBookingDialog({
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("start_time")}>
-              <input
-                type="text"
-                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm"
-                value={fmt12(startMin)}
-                readOnly
-              />
+              {dayHours ? (
+                <select
+                  value={String(startMin)}
+                  onChange={(e) => setStartMin(Number(e.target.value))}
+                  disabled={startOptions.length === 0}
+                  className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none disabled:opacity-50"
+                >
+                  {startOptions.length === 0 ? (
+                    <option value="">—</option>
+                  ) : (
+                    startOptions.map((m) => (
+                      <option key={m} value={m}>
+                        {fmt12(m)}
+                      </option>
+                    ))
+                  )}
+                </select>
+              ) : (
+                <div className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm flex items-center text-[hsl(var(--ink-3))]">
+                  {t("venue_closed_day")}
+                </div>
+              )}
             </Field>
             <Field label={t("duration")}>
               <select
@@ -731,18 +788,6 @@ function AssignBookingDialog({
               </select>
             </Field>
           </div>
-
-          <Field label={t("start_time")}>
-            <input
-              type="time"
-              value={`${String(Math.floor(((startMin % 1440) + 1440) % 1440 / 60)).padStart(2, "0")}:${String(startMin % 60).padStart(2, "0")}`}
-              onChange={(e) => {
-                const [h, m] = e.target.value.split(":").map(Number)
-                setStartMin(h * 60 + m)
-              }}
-              className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
-            />
-          </Field>
 
           <Field label={t("sport")}>
             <select
@@ -834,7 +879,7 @@ function AssignBookingDialog({
           </Button>
           <Button
             onClick={() => create.mutate()}
-            disabled={create.isPending}
+            disabled={create.isPending || !dayHours || startOptions.length === 0}
             className="gap-1"
           >
             {create.isPending ? (
