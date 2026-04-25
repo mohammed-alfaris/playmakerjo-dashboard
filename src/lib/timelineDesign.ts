@@ -11,8 +11,12 @@ import type { DayHours, DayOfWeek, OperatingHours } from "@/lib/types"
 
 // ---------- Layout constants ----------
 
-export const HOURS_START = 10
-export const HOURS_END = 25 // allow overnight (1am = 25)
+/**
+ * Default frame when a venue has no operating hours for the day.
+ * Use {@link frameFor} to get the real per-venue frame.
+ */
+export const HOURS_START = 8
+export const HOURS_END = 24
 export const PX_PER_MIN = 1.6
 export const LANE_H = 50
 
@@ -157,6 +161,30 @@ export function hoursFor(oh: OperatingHours | undefined, date: Date): DayHours |
   if (!h || h.closed) return null
   if (!h.open || !h.close) return null
   return h
+}
+
+/**
+ * Compute the timeline frame [startMin, endMin] for a given date, derived
+ * from the venue's operating hours. Returns minutes-from-midnight, with
+ * `endMin` rolled past 24h when hours cross midnight (e.g. 9am-1am ->
+ * 540..1500). Times are rounded outward to the nearest whole hour so the
+ * hour ticks land cleanly.
+ *
+ * Falls back to {@link HOURS_START}..{@link HOURS_END} (08:00–24:00) when
+ * the venue is closed that day or has no hours configured.
+ */
+export function frameFor(
+  oh: OperatingHours | undefined,
+  date: Date,
+): { startMin: number; endMin: number } {
+  const h = hoursFor(oh, date)
+  if (!h) return { startMin: HOURS_START * 60, endMin: HOURS_END * 60 }
+  const open = parseHHMM(h.open)
+  let close = parseHHMM(h.close)
+  if (close <= open) close += 24 * 60
+  const startMin = Math.floor(open / 60) * 60
+  const endMin = Math.ceil(close / 60) * 60
+  return { startMin, endMin }
 }
 
 // ---------- Lane assignment (football split) ----------

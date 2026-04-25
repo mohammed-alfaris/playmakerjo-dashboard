@@ -3,8 +3,6 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react"
 import { cn } from "@/lib/utils"
 import { Chip } from "@/components/shared/design/Chip"
 import {
-  HOURS_START,
-  HOURS_END,
   PX_PER_MIN,
   LANE_H,
   STATUS_META,
@@ -16,6 +14,7 @@ import {
   renderStatusFor,
   lanesFor,
   hoursFor,
+  frameFor,
   parseHHMM,
   fmtRange,
   type LaneAssignment,
@@ -28,8 +27,9 @@ import type { Booking } from "@/api/bookings"
 // ---------------------------------------------------------------------------
 // LanesTimeline — the "Clean" Lanes grid (ported from timeslots-clean.jsx).
 // Used by both the full Timeslots page and the compact VenueSlotTimeline on
-// the profile. Absolute-positioned booking blocks on a fixed minute axis
-// (HOURS_START..HOURS_END × PX_PER_MIN).
+// the profile. Absolute-positioned booking blocks on a minute axis whose
+// frame [frameStart, frameEnd] is derived per-venue from operating hours
+// (see frameFor in lib/timelineDesign.ts) × PX_PER_MIN.
 // Responsibilities: layout + hover peek + drag-on-empty. Data fetch,
 // mutations, and wrapping shell live in the caller.
 // ---------------------------------------------------------------------------
@@ -70,8 +70,14 @@ export function LanesTimeline({
 }: LanesTimelineProps) {
   const { t, lang } = useT()
   const pxPerMin = PX_PER_MIN
-  const frameStart = HOURS_START * 60
-  const frameEnd = HOURS_END * 60
+  // Frame is derived from the venue's operating hours for the selected day,
+  // so a venue that opens at 9am shows from 9am (not the old hardcoded 10am)
+  // and a venue that closes at 11pm doesn't show empty space until 1am.
+  // Falls back to 08:00–24:00 when the venue is closed or has no hours.
+  const { startMin: frameStart, endMin: frameEnd } = useMemo(
+    () => frameFor(venue.operatingHours, date),
+    [venue.operatingHours, date],
+  )
   const frameWidth = (frameEnd - frameStart) * pxPerMin
   // Both modes use 180px so real pitch names ("basketball", "volleyball court 1")
   // never truncate. Compact mode still feels tighter via smaller label padding.
@@ -325,7 +331,7 @@ export function LanesTimeline({
                     </div>
 
                     {/* Body. overflow-hidden keeps booking blocks that fall
-                        outside the [HOURS_START, HOURS_END] frame from
+                        outside the [frameStart, frameEnd] frame from
                         bleeding left onto the label column. */}
                     <div
                       className="relative flex-1 bg-card overflow-hidden"
