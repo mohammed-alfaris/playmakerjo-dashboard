@@ -23,6 +23,8 @@ import { Chip } from "@/components/shared/design/Chip"
 import { Tabs } from "@/components/shared/design/Tabs"
 import { VenueFormDialog } from "./VenueFormDialog"
 import { VenueSlotTimeline } from "./VenueSlotTimeline"
+import { PermanentBookingsTab } from "./PermanentBookingsTab"
+import { useAuthStore } from "@/store/authStore"
 import { getVenue, getVenueStats, type Pitch, type Venue } from "@/api/venues"
 import { getPayments, type Payment } from "@/api/payments"
 import { getReviews, type Review } from "@/api/reviews"
@@ -40,7 +42,14 @@ import { getBookings, type Booking } from "@/api/bookings"
 // gracefully when the backend hasn't been extended with daily aggregates yet.
 // ---------------------------------------------------------------------------
 
-type TabId = "overview" | "pitches" | "hours" | "gallery" | "payments" | "reviews"
+type TabId =
+  | "overview"
+  | "pitches"
+  | "hours"
+  | "gallery"
+  | "payments"
+  | "reviews"
+  | "permanent"
 
 export default function VenueDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -131,6 +140,13 @@ export default function VenueDetailPage() {
   const sportsChips = venue?.sports ?? []
   const pitches: Pitch[] = venue?.pitches ?? []
 
+  // Permanent bookings tab is owner-managed: visible only to super_admin or
+  // the venue's owner.
+  const currentUser = useAuthStore((s) => s.user)
+  const canManagePermanent =
+    currentUser?.role === "super_admin" ||
+    (currentUser?.role === "venue_owner" && venue?.owner?.id === currentUser.id)
+
   const tabs: Array<{ id: TabId; label: string; badge?: string | number }> = [
     { id: "overview", label: t("tab_overview") },
     { id: "pitches", label: t("tab_pitches"), badge: pitches.length || undefined },
@@ -138,6 +154,9 @@ export default function VenueDetailPage() {
     { id: "gallery", label: t("tab_gallery"), badge: images.length || undefined },
     { id: "payments", label: t("tab_payments") },
     { id: "reviews", label: t("tab_reviews"), badge: reviewsTotal || undefined },
+    ...(canManagePermanent
+      ? [{ id: "permanent" as TabId, label: t("tab_permanent") }]
+      : []),
   ]
 
   if (venueLoading || !venue) {
@@ -355,6 +374,10 @@ export default function VenueDetailPage() {
 
         {activeTab === "reviews" && (
           <ReviewsTab reviews={reviews} isLoading={reviewsLoading} />
+        )}
+
+        {activeTab === "permanent" && canManagePermanent && (
+          <PermanentBookingsTab venue={venue} />
         )}
       </div>
 
