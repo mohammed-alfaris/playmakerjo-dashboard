@@ -1,0 +1,6 @@
+export { OverviewTab } from "./OverviewTab"
+export { PitchesTab } from "./PitchesTab"
+export { HoursTab } from "./HoursTab"
+export { GalleryTab, Lightbox } from "./GalleryTab"
+export { PaymentsTab } from "./PaymentsTab"
+export { ReviewsTab } from "./ReviewsTab"

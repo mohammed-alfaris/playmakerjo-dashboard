@@ -279,6 +279,7 @@
   }
   @keyframes pm-shim { to { transform: translateX(100%); } }
 
+  /* deprecated: use Tailwind rtl:rotate-180 instead */
   [dir="rtl"] .rtl-flip { transform: scaleX(-1); }
 }
 

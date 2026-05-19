@@ -5,6 +5,7 @@ export interface PermanentBooking {
   venueId: string
   pitchId: string | null
   pitchSize: string | null
+  sport: string | null
   /** 0 = Sunday … 6 = Saturday (matches `Date.getDay()`). */
   dayOfWeek: number
   /** "HH:mm" 24h. */

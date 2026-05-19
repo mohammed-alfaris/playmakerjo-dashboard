@@ -111,7 +111,7 @@ export function PermanentBookingFormDialog({ venue, open, onOpenChange, onCreate
       return
     }
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) {
-      toast.error("Invalid time")
+      toast.error(t("invalid_time_format"))
       return
     }
     create.mutate({
@@ -238,8 +238,9 @@ export function PermanentBookingFormDialog({ venue, open, onOpenChange, onCreate
             </Label>
             <Input
               value={label}
-              onChange={(e) => setLabel(e.target.value)}
+              onChange={(e) => setLabel(e.target.value.slice(0, 120))}
               placeholder={t("permanent_label_placeholder")}
+              maxLength={120}
             />
           </div>
         </div>

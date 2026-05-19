@@ -19,6 +19,7 @@ export interface SportConfig {
 export interface Pitch {
   id: string
   name: string
+  nameAr?: string | null
   sport: string
   parentSize?: string | null       // football only; "5" | "6" | "7" | "8" | "11"
   subSizes?: string[]
@@ -30,13 +31,17 @@ export interface Pitch {
 export interface Venue {
   id: string
   name: string
+  nameAr?: string | null
   owner: { id: string; name: string }
   sports: string[]
   city: string
+  cityAr?: string | null
   address: string
+  addressAr?: string | null
   pricePerHour: number
   status: "active" | "inactive" | "pending"
   description?: string
+  descriptionAr?: string | null
   images?: string[]
   latitude?: number
   longitude?: number
