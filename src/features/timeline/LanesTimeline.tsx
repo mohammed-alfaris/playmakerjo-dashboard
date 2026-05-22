@@ -35,7 +35,7 @@ import type { Booking } from "@/api/bookings"
 // ---------------------------------------------------------------------------
 
 export interface LanesTimelineProps {
-  venue: Pick<Venue, "id" | "operatingHours" | "pitches">
+  venue: Pick<Venue, "id" | "operatingHours" | "pitches" | "minBookingDuration">
   bookings: Booking[]
   date: Date
   /** Optional callback when the user clicks an open slot (or drags to select a range). */
@@ -50,6 +50,9 @@ export interface LanesTimelineProps {
   labelWidth?: number
   canManage?: boolean
 }
+
+/** Snap unit for drag-create. The drag rectangle locks to multiples of this. */
+const SNAP_MIN = 15
 
 interface PitchRow {
   pitch: Pitch
@@ -84,6 +87,10 @@ export function LanesTimeline({
   const resolvedLabelWidth = labelWidth ?? 180
 
   const pitches = useMemo(() => venue.pitches ?? [], [venue.pitches])
+  // Minimum drag duration. Default 30 if the venue doesn't set a min — keeps
+  // the previous behaviour for legacy venues. When the venue does set a min,
+  // the drag rectangle locks to that so a release below it just resets.
+  const dragMinDuration = Math.max(SNAP_MIN, venue.minBookingDuration ?? 30)
 
   // Build per-pitch row (with lane assignments).
   //
@@ -175,7 +182,7 @@ export function LanesTimeline({
       pitchId: pitch.id,
       sport: pitch.sport,
       startMin,
-      endMin: Math.min(frameEnd, startMin + 60),
+      endMin: Math.min(frameEnd, startMin + Math.max(60, dragMinDuration)),
       row,
       laneCount,
     })
@@ -185,7 +192,7 @@ export function LanesTimeline({
       if (!d) return
       const m = clientXToMin(e.clientX, grid)
       const s = Math.min(d.startX, m)
-      const e2 = Math.max(d.startX + 30, Math.max(d.startX, m))
+      const e2 = Math.max(d.startX + dragMinDuration, Math.max(d.startX, m))
       setDraft({ pitchId: d.pitchId, sport: d.sport, startMin: s, endMin: e2, row: d.row, laneCount: d.laneCount })
     }
     const handleUp = () => {
@@ -194,7 +201,7 @@ export function LanesTimeline({
       dragRef.current = null
       setDraft((cur) => {
         if (!cur) return null
-        if (cur.endMin - cur.startMin >= 30 && onCreate) {
+        if (cur.endMin - cur.startMin >= dragMinDuration && onCreate) {
           onCreate({
             pitchId: cur.pitchId,
             sport: cur.sport,
@@ -420,6 +427,7 @@ export function LanesTimeline({
                           laneSpan={a.laneSpan}
                           pxPerMin={pxPerMin}
                           frameStart={frameStart}
+                          frameEnd={frameEnd}
                           onClick={onOpenBooking}
                           onPeek={(b, ev) => setPeek({ x: ev.clientX, y: ev.clientY, booking: b })}
                           onPeekOut={() => setPeek(null)}
@@ -514,6 +522,7 @@ function BookingBlock({
   laneSpan,
   pxPerMin,
   frameStart,
+  frameEnd,
   onClick,
   onPeek,
   onPeekOut,
@@ -525,6 +534,7 @@ function BookingBlock({
   laneSpan: number
   pxPerMin: number
   frameStart: number
+  frameEnd: number
   onClick?: (b: Booking) => void
   onPeek?: (b: Booking, ev: ReactMouseEvent) => void
   onPeekOut?: () => void
@@ -532,7 +542,11 @@ function BookingBlock({
   const status = renderStatusFor(booking)
   const meta = STATUS_META[status]
   const color = colorFor(meta.color)
-  const width = Math.max(20, duration * pxPerMin - 2)
+  // Clip the rendered width to the visible frame. Without this, a booking that
+  // starts before close but whose duration spills past close (e.g. 23:30 + 90m
+  // on a venue closing at 00:00) overflows the right edge of the timeline.
+  const visibleDuration = Math.max(0, Math.min(duration, frameEnd - startMin))
+  const width = Math.max(20, visibleDuration * pxPerMin - 2)
   const height = laneSpan * LANE_H - 8
   const style: CSSProperties = {
     insetInlineStart: (startMin - frameStart) * pxPerMin,

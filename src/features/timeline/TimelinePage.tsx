@@ -305,7 +305,13 @@ export default function TimelinePage() {
           minDuration={selectedVenue.minBookingDuration}
           maxDuration={selectedVenue.maxBookingDuration}
           operatingHours={selectedVenue.operatingHours}
-          onClose={() => setDraftOpen(false)}
+          onClose={() => {
+            setDraftOpen(false)
+            // Clear the preset so the next time the dialog opens (drag-create
+            // sets its own preset; "New Booking" button resets to null) it
+            // doesn't briefly flash the previous booking's values.
+            setDraftPreset(null)
+          }}
         />
       )}
 

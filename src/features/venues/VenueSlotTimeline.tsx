@@ -234,7 +234,13 @@ export function VenueSlotTimeline({ venue }: { venue: Venue }) {
           pitches={venue.pitches ?? []}
           minDuration={venue.minBookingDuration}
           maxDuration={venue.maxBookingDuration}
-          onClose={() => setDraftOpen(false)}
+          onClose={() => {
+            setDraftOpen(false)
+            // Clear the preset so the next open (drag-create resets it
+            // anyway; "New Booking" button already nulls it) doesn't flash
+            // the previous booking's values.
+            setDraftPreset(null)
+          }}
         />
       )}
 
