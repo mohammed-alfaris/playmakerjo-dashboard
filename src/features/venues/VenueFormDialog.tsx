@@ -171,10 +171,21 @@ interface VenueFormDialogProps {
 /**
  * Build a default hours[7] array from an OperatingHours map (or sane defaults).
  * Missing entries default to open 09:00–22:00.
+ *
+ * Backend has historically serialized day keys as either full form
+ * (`monday`, …) or 3-letter short form (`mon`, …). We accept both so
+ * editing an existing venue surfaces its real hours regardless of which
+ * shape they were saved in.
  */
+const FULL_TO_SHORT_DAY: Record<DayOfWeek, string> = {
+  monday: "mon", tuesday: "tue", wednesday: "wed", thursday: "thu",
+  friday: "fri", saturday: "sat", sunday: "sun",
+}
+
 function hoursFromOperating(operating?: OperatingHours | null): PitchValues["hours"] {
+  const oh = (operating ?? {}) as Record<string, OperatingHours[DayOfWeek] | undefined>
   return DAYS_OF_WEEK.map<PitchValues["hours"][number]>((day) => {
-    const entry = operating?.[day]
+    const entry = oh[day] ?? oh[FULL_TO_SHORT_DAY[day]]
     if (!entry || entry.closed) {
       return {
         day,

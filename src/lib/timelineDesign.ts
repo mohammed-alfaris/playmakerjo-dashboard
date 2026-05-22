@@ -153,11 +153,27 @@ export function dayKeyOf(date: Date): DayOfWeek {
   return INDEX_TO_FULL[date.getDay()]
 }
 
-/** Read a day's hours from an OperatingHours object. Returns null if closed or missing. */
+/**
+ * Read a day's hours from an OperatingHours object. Returns null if closed
+ * or missing.
+ *
+ * The backend has historically serialized day keys in two shapes:
+ *   - 3-letter short form: `mon`, `tue`, `wed`, …  (older venues, seed data,
+ *     and the API's own day-of-week comparison in BookingsController)
+ *   - full long form: `monday`, `tuesday`, …  (newer venues created via the
+ *     dashboard form, which writes the long form matching the TS type)
+ *
+ * To avoid showing "venue closed" all day for venues whose hours are in the
+ * other shape, we look up both keys and accept the first that has data. The
+ * declared `OperatingHours` type is `Partial<Record<DayOfWeek, …>>` (long
+ * form only), so we cast the lookup for the short form.
+ */
 export function hoursFor(oh: OperatingHours | undefined, date: Date): DayHours | null {
   if (!oh) return null
-  const k = dayKeyOf(date)
-  const h = oh[k]
+  const fullKey = dayKeyOf(date)
+  const shortKey = FULL_TO_SHORT[fullKey]
+  const ohAny = oh as Record<string, DayHours | undefined>
+  const h = ohAny[fullKey] ?? ohAny[shortKey]
   if (!h || h.closed) return null
   if (!h.open || !h.close) return null
   return h
