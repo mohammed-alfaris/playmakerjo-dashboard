@@ -225,7 +225,17 @@ export function LanesTimeline({
   for (let m = frameStart; m <= frameEnd; m += 60) hourTicks.push(m)
 
   return (
-    <div className="relative rounded-[16px] bg-card border border-[hsl(var(--line))] shadow-sm-stadium overflow-hidden">
+    // Anchor the grid to LTR even when the page is RTL. Time conventionally
+    // flows left-to-right (clock numerals, calendar apps like Google Calendar /
+    // Outlook all keep the timeline LTR in Arabic locales). Without this the
+    // hour labels and NOW vertical use `left:` (physical pixels, never flip)
+    // but booking blocks, drag rectangles, and the NOW badge use
+    // `insetInlineStart` (flips in RTL), so the two halves of the grid
+    // disagree and blocks land at the mirror of their actual time.
+    <div
+      dir="ltr"
+      className="relative rounded-[16px] bg-card border border-[hsl(var(--line))] shadow-sm-stadium overflow-hidden"
+    >
       {/* Hour strip + pitch rows, horizontally scrollable on overflow */}
       <div className="overflow-x-auto">
         <div style={{ minWidth: resolvedLabelWidth + frameWidth + 16 }}>
