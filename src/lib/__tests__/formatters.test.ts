@@ -14,6 +14,6 @@ describe("formatCurrency", () => {
 
   it("handles fractional amounts", () => {
     const result = formatCurrency(12.5)
-    expect(result).toMatch(/12[\.,]5/)
+    expect(result).toMatch(/12[.,]5/)
   })
 })
