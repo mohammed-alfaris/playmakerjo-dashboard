@@ -95,12 +95,16 @@ export async function getVenueStats(id: string) {
   return res.data
 }
 
-export async function createVenue(data: Partial<Venue>) {
+// Write payload: the API takes a snake_case `owner_id` for owner assignment
+// (admin-only on PATCH) and never accepts the nested `owner` object.
+export type VenuePayload = Partial<Omit<Venue, "owner">> & { owner_id?: string }
+
+export async function createVenue(data: VenuePayload) {
   const res = await api.post("/venues", data)
   return res.data
 }
 
-export async function updateVenue(id: string, data: Partial<Venue>) {
+export async function updateVenue(id: string, data: VenuePayload) {
   const res = await api.patch(`/venues/${id}`, data)
   return res.data
 }
