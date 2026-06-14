@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Loader2, ShieldCheck } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -61,9 +61,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo / Brand */}
         <div className="mb-6 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
+          <img src="/logo-mark.png" alt="PlayMaker" className="h-12 w-12" />
           <h1 className="text-xl font-bold tracking-tight font-display">{t("sports_venue")}</h1>
           <p className="text-sm text-muted-foreground">{t("admin_dashboard")}</p>
         </div>

@@ -13,7 +13,7 @@
     --card-foreground: 156 27% 6%;
     --popover: 0 0% 100%;
     --popover-foreground: 156 27% 6%;
-    --primary: 148 80% 22%;            /* #0b6438 emerald */
+    --primary: 108 72% 30%;            /* #2b8415 deepened acid — AA 4.76:1 on white */
     --primary-foreground: 0 0% 100%;
     --secondary: 60 11% 92%;           /* #efefe9 surface-2 */
     --secondary-foreground: 156 27% 6%;
@@ -25,7 +25,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 68 9% 87%;               /* #dfe0d9 line */
     --input: 68 9% 87%;
-    --ring: 148 80% 22%;
+    --ring: 98 100% 71%;               /* #a1ff6b bright acid ring/highlight */
     --radius: 0.625rem;                /* 10px — design's --radius */
 
     /* Stadium extended tokens */
@@ -37,12 +37,12 @@
     --surface: 0 0% 100%;
     --surface-2: 60 11% 92%;
     --surface-3: 68 13% 89%;
-    --brand: 148 80% 22%;
-    --brand-2: 141 47% 34%;            /* #2e7d4f */
-    --brand-tint: 142 29% 89%;         /* #d9ebdf */
-    --brand-ink: 154 78% 11%;          /* #053220 */
+    --brand: 108 72% 30%;             /* #2b8415 deepened acid */
+    --brand-2: 98 100% 71%;           /* #a1ff6b bright acid */
+    --brand-tint: 100 60% 92%;        /* #e7f7de */
+    --brand-ink: 110 70% 22%;         /* #1e5f11 */
     --brand-foreground: 0 0% 100%;
-    --lime: 83 86% 69%;                /* #b6f569 LIVE highlight */
+    --lime: 98 100% 71%;              /* #a1ff6b acid highlight */
     --amber: 35 82% 47%;               /* #d98816 */
     --amber-tint: 38 86% 89%;          /* #fbeacd */
     --amber-ink: 35 92% 23%;           /* #6b4305 */
@@ -65,9 +65,9 @@
     --surface-container: 68 13% 89%;
     --surface-container-high: 68 13% 85%;
     --surface-container-lowest: 0 0% 100%;
-    --primary-container: 141 47% 34%;
-    --primary-fixed: 142 29% 89%;
-    --on-primary-fixed: 154 78% 11%;
+    --primary-container: 120 70% 26%;  /* deep green gradient end — keeps white legible */
+    --primary-fixed: 100 60% 92%;
+    --on-primary-fixed: 110 70% 22%;
     --tertiary: 350 58% 46%;
     --on-surface: 156 27% 6%;
     --on-surface-variant: 158 12% 26%;
@@ -82,8 +82,8 @@
     --card-foreground: 120 10% 94%;
     --popover: 156 15% 8%;
     --popover-foreground: 120 10% 94%;
-    --primary: 144 50% 49%;            /* #3fba74 */
-    --primary-foreground: 0 0% 100%;
+    --primary: 98 100% 71%;            /* #a1ff6b acid — AA 15.9:1 w/ near-black */
+    --primary-foreground: 220 23% 5%;  /* #0a0c10 near-black on-acid */
     --secondary: 156 13% 11%;          /* #171f1b */
     --secondary-foreground: 120 10% 94%;
     --muted: 156 13% 11%;
@@ -94,7 +94,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 145 8% 16%;              /* #232b27 */
     --input: 145 8% 16%;
-    --ring: 144 50% 49%;
+    --ring: 98 100% 71%;               /* #a1ff6b bright acid ring/highlight */
 
     --ink: 120 10% 94%;
     --ink-2: 140 7% 74%;               /* #b7c2bc */
@@ -104,12 +104,12 @@
     --surface: 156 15% 8%;
     --surface-2: 156 13% 11%;
     --surface-3: 156 15% 14%;          /* #1e2824 */
-    --brand: 144 50% 49%;
-    --brand-2: 140 50% 62%;            /* #6ad194 */
-    --brand-tint: 147 38% 14%;         /* #163021 */
-    --brand-ink: 142 67% 83%;          /* #b6f2cd */
-    --brand-foreground: 0 0% 100%;
-    --lime: 83 86% 69%;
+    --brand: 98 100% 71%;             /* #a1ff6b acid */
+    --brand-2: 96 77% 61%;            /* #8be84f acid-dim */
+    --brand-tint: 110 40% 12%;        /* #162b12 */
+    --brand-ink: 98 90% 80%;          /* #c0fa9e */
+    --brand-foreground: 220 23% 5%;   /* #0a0c10 near-black on acid */
+    --lime: 98 100% 71%;
     --amber: 36 85% 62%;                /* #f0b14a */
     --amber-tint: 34 47% 16%;           /* #3a2c15 */
     --amber-ink: 36 85% 62%;
@@ -131,9 +131,9 @@
     --surface-container: 156 15% 14%;
     --surface-container-high: 156 15% 18%;
     --surface-container-lowest: 156 15% 8%;
-    --primary-container: 140 50% 62%;
-    --primary-fixed: 147 38% 14%;
-    --on-primary-fixed: 142 67% 83%;
+    --primary-container: 96 77% 61%;
+    --primary-fixed: 110 40% 12%;
+    --on-primary-fixed: 98 90% 80%;
     --tertiary: 350 75% 66%;
     --on-surface: 120 10% 94%;
     --on-surface-variant: 140 7% 74%;

@@ -57,7 +57,7 @@ export function QuickActionFab() {
         whileTap={{ scale: 0.94 }}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "flex h-14 w-14 items-center justify-center rounded-full text-white shadow-ambient",
+          "flex h-14 w-14 items-center justify-center rounded-full text-primary-foreground shadow-ambient",
           "bg-primary-gradient transition-transform duration-200 ease-kinetic",
           open && "rotate-45"
         )}

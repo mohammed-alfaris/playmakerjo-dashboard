@@ -114,10 +114,11 @@ export function Sidebar({
         )}
       >
         {collapsed ? (
-          <span className="text-lg font-semibold font-display text-primary">PM</span>
+          <img src="/logo-mark.png" alt="PlayMaker" className="h-7 w-7" />
         ) : (
-          <span className="text-lg font-semibold tracking-tight font-display text-foreground">
-            PlayMaker <span className="text-primary">JO</span>
+          <span className="flex items-center gap-2 text-lg font-bold tracking-tight font-display">
+            <img src="/logo-mark.png" alt="" className="h-7 w-7" />
+            <span className="text-foreground">PLAY<span className="text-primary">MAKER</span></span>
           </span>
         )}
       </div>
