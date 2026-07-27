@@ -88,6 +88,12 @@ export async function cancelSeries(groupId: string) {
   return res.data
 }
 
+/** Cancels a single booking — the plain per-row action, distinct from cancelSeries. */
+export async function cancelBooking(id: string) {
+  const res = await api.patch(`/bookings/${id}/cancel`)
+  return res.data.data as Booking
+}
+
 export async function reviewProof(id: string, payload: { approved: boolean; note?: string }) {
   const res = await api.patch(`/bookings/${id}/review-proof`, payload)
   return res.data.data as Booking

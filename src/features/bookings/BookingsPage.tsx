@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { getBookings, cancelSeries, completeBooking, markNoShow, type Booking } from "@/api/bookings"
+import { getBookings, cancelSeries, cancelBooking, completeBooking, markNoShow, type Booking } from "@/api/bookings"
 import { getVenues, type Venue } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
 import { useOwnerFilter, useRole } from "@/hooks/useRole"
@@ -26,6 +26,10 @@ const DATE_INPUT_CLASS =
   "flex h-9 w-36 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm " +
   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground"
 
+// Mirrors the backend's allowed transitions in BookingsController.Cancel — everything except
+// cancelled/completed/no_show, which are terminal states the API itself refuses to touch.
+const CANCELLABLE_STATUSES = ["pending", "pending_payment", "pending_review", "confirmed"]
+
 export default function BookingsPage() {
   const { page, limit, setPage, resetPage } = usePagination()
   const ownerFilter = useOwnerFilter()
@@ -38,6 +42,7 @@ export default function BookingsPage() {
   const [pitch_id, setPitchId]  = useState("all")
   const [reviewBookingId, setReviewBookingId] = useState<string | null>(null)
   const [cancelGroupId, setCancelGroupId] = useState<string | null>(null)
+  const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
   const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -60,7 +65,21 @@ export default function BookingsPage() {
       queryClient.invalidateQueries({ queryKey: ["bookings"] })
       setCompleteBookingId(null)
     },
-    onError: () => toast.error(t("booking_complete_failed")),
+    // Surface the server's own message — this is how "still owes 20 JOD" reaches the
+    // owner instead of a generic failure that doesn't say why.
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? t("booking_complete_failed")),
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => cancelBooking(id),
+    onSuccess: () => {
+      toast.success(t("booking_cancelled_toast"))
+      queryClient.invalidateQueries({ queryKey: ["bookings"] })
+      setCancelBookingId(null)
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? t("manual_booking_failed")),
   })
 
   const noShowMutation = useMutation({
@@ -331,6 +350,17 @@ export default function BookingsPage() {
                 </Button>
               </>
             )}
+            {CANCELLABLE_STATUSES.includes(b.status) && (isAdmin || isOwner) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={() => setCancelBookingId(b.id)}
+              >
+                <X className="h-3 w-3 me-1" />
+                {t("cancel")}
+              </Button>
+            )}
           </div>
         )
       },
@@ -487,6 +517,16 @@ export default function BookingsPage() {
         onOpenChange={(open) => { if (!open) setNoShowBookingId(null) }}
         onConfirm={() => noShowBookingId && noShowMutation.mutate(noShowBookingId)}
         isLoading={noShowMutation.isPending}
+      />
+
+      <ConfirmDialog
+        title={t("cancel")}
+        description={t("cancel_booking_confirm")}
+        variant="destructive"
+        open={!!cancelBookingId}
+        onOpenChange={(open) => { if (!open) setCancelBookingId(null) }}
+        onConfirm={() => cancelBookingId && cancelMutation.mutate(cancelBookingId)}
+        isLoading={cancelMutation.isPending}
       />
     </div>
   )

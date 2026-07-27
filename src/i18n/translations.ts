@@ -486,6 +486,8 @@ export const translations = {
     mark_no_show_confirm: "Mark this booking as no-show?",
     booking_no_show_marked: "Booking marked as no-show",
     booking_no_show_failed: "Failed to mark booking as no-show",
+    cancel_booking_confirm: "Cancel this booking?",
+    booking_cancelled_toast: "Booking cancelled",
     // Profile / Account settings
     nav_profile: "Profile",
     profile_settings: "Profile Settings",
@@ -1165,6 +1167,8 @@ export const translations = {
     mark_no_show_confirm: "هل تريد تسجيل عدم حضور اللاعب؟",
     booking_no_show_marked: "تم تسجيل عدم الحضور",
     booking_no_show_failed: "فشل في تسجيل عدم الحضور",
+    cancel_booking_confirm: "إلغاء هذا الحجز؟",
+    booking_cancelled_toast: "تم إلغاء الحجز",
     // Profile / Account settings
     nav_profile: "الملف الشخصي",
     profile_settings: "إعدادات الحساب",
