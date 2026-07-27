@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import api from "@/api/axios"
+import CustomerPhoneField, { type CustomerDraft } from "@/features/customers/CustomerPhoneField"
 import type { Pitch } from "@/api/venues"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
@@ -59,7 +60,11 @@ export function AssignBookingDialog({
   const { t } = useT()
   const qc = useQueryClient()
   const [sport, setSport] = useState<string>(preset?.sport ?? sports?.[0] ?? "football")
-  const [playerName, setPlayerName] = useState("")
+  // Replaces the old free-text `playerName`. That field wrote the customer's name into the
+  // notes string as "[MANUAL] [sport] Walk-in: خالد." — unsearchable, phone-less, and
+  // invisible to every other screen.
+  const [customer, setCustomer] = useState<CustomerDraft>({ phone: "", name: "" })
+  const [customerPaid, setCustomerPaid] = useState(true)
   const [notes, setNotes] = useState("")
 
   const durationOptions = useMemo(() => {
@@ -158,8 +163,11 @@ export function AssignBookingDialog({
       const normalized = ((startMin % (24 * 60)) + 24 * 60) % (24 * 60)
       const startHH = String(Math.floor(normalized / 60)).padStart(2, "0")
       const startMM = String(normalized % 60).padStart(2, "0")
+      // The "[MANUAL] [sport]" prefix stays for now: historical rows carry it and the
+      // read-side parser still uses it to recover names from bookings taken before customer
+      // records existed. The "Walk-in: {name}." fragment is gone — that identity now lives
+      // in a real column instead of inside a string.
       const notePrefix = `[MANUAL] [${sport}]`
-      const walkIn = playerName ? ` Walk-in: ${playerName}.` : ""
       const extra = notes ? ` ${notes}` : ""
       const pitchIdToSend =
         pitchId && !pitchId.startsWith("legacy-") ? pitchId : undefined
@@ -170,8 +178,11 @@ export function AssignBookingDialog({
         startTime: `${startHH}:${startMM}`,
         duration,
         paymentMethod: "cliq",
-        notes: `${notePrefix}${walkIn}${extra}`.trim(),
+        notes: `${notePrefix}${extra}`.trim(),
         isManual: true,
+        customerPhone: customer.phone.trim() || undefined,
+        customerName: customer.name.trim() || undefined,
+        customerPaid,
         ...(pitchSize ? { pitchSize } : {}),
         ...(pitchIdToSend ? { pitchId: pitchIdToSend } : {}),
       })
@@ -202,6 +213,10 @@ export function AssignBookingDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {/* First thing in the dialog, because it is the first thing asked on the phone —
+              and because knowing who this is has to happen BEFORE the slot is given away. */}
+          <CustomerPhoneField value={customer} onChange={setCustomer} autoFocus />
+
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("start_time")}>
               {hasOperatingHours ? (
@@ -316,14 +331,27 @@ export function AssignBookingDialog({
             </Field>
           )}
 
-          <Field label={t("player_name")}>
-            <input
-              type="text"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              placeholder={t("player_name_placeholder")}
-              className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] placeholder:text-[hsl(var(--ink-3))] focus:border-[hsl(var(--brand))] focus:outline-none"
-            />
+          {/* A booking taken over the phone on Sunday for Tuesday is held, not paid. The
+              system used to record every manual booking as settled in full the instant it
+              was created, which hid the most expensive kind of no-show there is. */}
+          <Field label={t("payment_status")}>
+            <div className="grid grid-cols-2 gap-2">
+              {[true, false].map((paid) => (
+                <button
+                  key={String(paid)}
+                  type="button"
+                  onClick={() => setCustomerPaid(paid)}
+                  className={
+                    "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors " +
+                    (customerPaid === paid
+                      ? "border-[hsl(var(--brand))] bg-brand-tint text-brand-ink"
+                      : "border-[hsl(var(--line))] text-[hsl(var(--ink-3))] hover:bg-surface-2")
+                  }
+                >
+                  {paid ? t("paid_now") : t("pays_on_arrival")}
+                </button>
+              ))}
+            </div>
           </Field>
 
           <Field label={t("notes")}>
