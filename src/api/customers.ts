@@ -170,6 +170,17 @@ export function normalizeJordanPhone(raw: string | null | undefined): string | n
   return /^\+9627[789]\d{7}$/.test(candidate) ? candidate : null
 }
 
+/**
+ * The owner's own customer list as a CSV file.
+ *
+ * Never gated behind a plan, a limit or a confirmation dialog. He collected these numbers
+ * himself by taking bookings; making them easy to take away is the point, not an oversight.
+ */
+export async function exportCustomers(): Promise<Blob> {
+  const res = await api.get("/customers/export", { responseType: "blob" })
+  return res.data
+}
+
 /** A wa.me link that opens the owner's OWN WhatsApp with the message pre-typed. */
 export function whatsappLink(phone: string, message: string): string {
   return `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`

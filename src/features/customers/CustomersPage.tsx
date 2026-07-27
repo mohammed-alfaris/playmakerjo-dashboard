@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Link } from "react-router-dom"
-import { Search, Contact2, AlertTriangle, BarChart3 } from "lucide-react"
+import { Search, Contact2, AlertTriangle, BarChart3, Download, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import type { ColumnDef } from "@tanstack/react-table"
-import { getCustomers, type Customer, type CustomerSegment } from "@/api/customers"
+import { getCustomers, exportCustomers, type Customer, type CustomerSegment } from "@/api/customers"
 import { DataTable } from "@/components/shared/DataTable"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { usePagination } from "@/hooks/usePagination"
@@ -27,6 +28,24 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("")
   const [segment, setSegment] = useState<CustomerSegment>("all")
   const [openId, setOpenId] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const blob = await exportCustomers()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error(t("something_went_wrong"))
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // resetPage is memoised (see usePagination) so this fires only when the term really
   // changes — before that fix it re-armed every render and dragged the list back to page 1.
@@ -135,12 +154,30 @@ export default function CustomersPage() {
         title={t("nav_customers")}
         subtitle={t("customers_subtitle")}
         action={
-          <Button asChild variant="outline" size="sm" className="gap-1.5">
-            <Link to="/customers/report">
-              <BarChart3 className="h-3.5 w-3.5" />
-              {t("report_monthly")}
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Ungated on purpose, and placed in the header rather than buried in a menu.
+                In a market where owners have been burned by platforms holding their
+                customer list hostage, a visible export button is the cheapest credible
+                proof that this one will not. */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Download className="h-3.5 w-3.5" />}
+              {t("export_customers")}
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link to="/customers/report">
+                <BarChart3 className="h-3.5 w-3.5" />
+                {t("report_monthly")}
+              </Link>
+            </Button>
+          </div>
         }
       />
 
