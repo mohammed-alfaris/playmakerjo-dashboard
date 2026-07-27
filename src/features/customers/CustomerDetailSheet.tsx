@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { useRole } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
 import { formatDate, formatCurrency } from "@/lib/formatters"
 
@@ -43,6 +44,9 @@ export function CustomerDetailSheet({
 }) {
   const { t } = useT()
   const qc = useQueryClient()
+  // A read-only clerk may look up a customer but not rewrite the book. The server
+  // enforces this too; hiding the controls just stops the request being made at all.
+  const { canWrite } = useRole()
   const [name, setName] = useState("")
   const [note, setNote] = useState("")
   const [confirmArchive, setConfirmArchive] = useState(false)
@@ -159,7 +163,11 @@ export function CustomerDetailSheet({
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">
                     {t("customer_name")}
                   </span>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={!canWrite}
+                  />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -169,16 +177,19 @@ export function CustomerDetailSheet({
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
                     placeholder={t("customer_note_placeholder")}
+                    disabled={!canWrite}
                   />
                 </label>
-                <Button
-                  size="sm"
-                  disabled={!dirty || save.isPending}
-                  onClick={() => save.mutate()}
-                >
-                  {save.isPending && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
-                  {t("save")}
-                </Button>
+                {canWrite && (
+                  <Button
+                    size="sm"
+                    disabled={!dirty || save.isPending}
+                    onClick={() => save.mutate()}
+                  >
+                    {save.isPending && <Loader2 className="me-2 h-3.5 w-3.5 animate-spin" />}
+                    {t("save")}
+                  </Button>
+                )}
               </div>
 
               <div className="my-5 h-px bg-border" />
@@ -217,15 +228,17 @@ export function CustomerDetailSheet({
 
               <div className="my-5 h-px bg-border" />
 
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-destructive"
-                onClick={() => setConfirmArchive(true)}
-              >
-                <Archive className="me-1.5 h-3.5 w-3.5" />
-                {t("customer_archive")}
-              </Button>
+              {canWrite && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive"
+                  onClick={() => setConfirmArchive(true)}
+                >
+                  <Archive className="me-1.5 h-3.5 w-3.5" />
+                  {t("customer_archive")}
+                </Button>
+              )}
             </>
           )}
         </SheetContent>
