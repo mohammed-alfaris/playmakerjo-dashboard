@@ -104,6 +104,12 @@ export async function completeBooking(id: string) {
   return res.data.data as Booking
 }
 
+/** Records that the remaining balance was collected in person, right now, in cash. */
+export async function settleBalance(id: string) {
+  const res = await api.patch(`/bookings/${id}/settle-balance`)
+  return res.data.data as Booking
+}
+
 export async function markNoShow(id: string) {
   const res = await api.patch(`/bookings/${id}/no-show`)
   return res.data.data as Booking

@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone } from "lucide-react"
+import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone, Banknote } from "lucide-react"
 import { toast } from "sonner"
 import { ProofReviewDialog } from "./ProofReviewDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { getBookings, cancelSeries, cancelBooking, completeBooking, markNoShow, type Booking } from "@/api/bookings"
+import { getBookings, cancelSeries, cancelBooking, completeBooking, settleBalance, markNoShow, type Booking } from "@/api/bookings"
 import { getVenues, type Venue } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
 import { useOwnerFilter, useRole } from "@/hooks/useRole"
@@ -44,6 +44,7 @@ export default function BookingsPage() {
   const [cancelGroupId, setCancelGroupId] = useState<string | null>(null)
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
+  const [settleBookingId, setSettleBookingId] = useState<string | null>(null)
   const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { isAdmin, isOwner } = useRole()
@@ -77,6 +78,17 @@ export default function BookingsPage() {
       toast.success(t("booking_cancelled_toast"))
       queryClient.invalidateQueries({ queryKey: ["bookings"] })
       setCancelBookingId(null)
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? t("manual_booking_failed")),
+  })
+
+  const settleMutation = useMutation({
+    mutationFn: (id: string) => settleBalance(id),
+    onSuccess: () => {
+      toast.success(t("payment_recorded"))
+      queryClient.invalidateQueries({ queryKey: ["bookings"] })
+      setSettleBookingId(null)
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e.response?.data?.message ?? t("manual_booking_failed")),
@@ -118,6 +130,11 @@ export default function BookingsPage() {
   const bookings: Booking[] = data?.data ?? []
   const pagination          = data?.pagination ?? { page, limit, total: 0 }
   const venueOptions: Venue[] = venuesData?.data ?? []
+
+  const settleBooking = bookings.find((b) => b.id === settleBookingId)
+  const settleRemaining = settleBooking
+    ? Math.max(0, (settleBooking.totalAmount ?? settleBooking.amount) - (settleBooking.amountPaid ?? 0))
+    : 0
 
   // Pitch filter/column only appear when the user has narrowed to a single
   // venue AND that venue has >1 pitch. Keeps the default view identical to
@@ -305,6 +322,7 @@ export default function BookingsPage() {
       header: "",
       cell: ({ row }) => {
         const b = row.original
+        const remaining = Math.max(0, (b.totalAmount ?? b.amount) - (b.amountPaid ?? 0))
         return (
           <div className="flex items-center gap-2">
             {b.paymentMethod === "cliq" && b.paymentProofStatus && (
@@ -315,6 +333,17 @@ export default function BookingsPage() {
               >
                 <Eye className="h-3 w-3 me-1" />
                 {t("review_proof")}
+              </Button>
+            )}
+            {b.status !== "cancelled" && remaining > 0.001 && (isAdmin || isOwner) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                onClick={() => setSettleBookingId(b.id)}
+              >
+                <Banknote className="h-3 w-3 me-1" />
+                {t("record_payment")} ({formatCurrency(remaining)})
               </Button>
             )}
             {b.recurringGroupId && b.status !== "cancelled" && (
@@ -527,6 +556,15 @@ export default function BookingsPage() {
         onOpenChange={(open) => { if (!open) setCancelBookingId(null) }}
         onConfirm={() => cancelBookingId && cancelMutation.mutate(cancelBookingId)}
         isLoading={cancelMutation.isPending}
+      />
+
+      <ConfirmDialog
+        title={t("record_payment")}
+        description={t("record_payment_confirm").replace("{amount}", formatCurrency(settleRemaining))}
+        open={!!settleBookingId}
+        onOpenChange={(open) => { if (!open) setSettleBookingId(null) }}
+        onConfirm={() => settleBookingId && settleMutation.mutate(settleBookingId)}
+        isLoading={settleMutation.isPending}
       />
     </div>
   )
