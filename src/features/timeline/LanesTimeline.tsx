@@ -20,6 +20,7 @@ import {
   type LaneAssignment,
 } from "@/lib/timelineDesign"
 import { formatCurrency } from "@/lib/formatters"
+import { bookingPersonName } from "@/lib/bookingParty"
 import { useT } from "@/i18n/LanguageContext"
 import type { Pitch, Venue } from "@/api/venues"
 import type { Booking } from "@/api/bookings"
@@ -549,6 +550,7 @@ function BookingBlock({
   onPeek?: (b: Booking, ev: ReactMouseEvent) => void
   onPeekOut?: () => void
 }) {
+  const { t } = useT()
   const status = renderStatusFor(booking)
   const meta = STATUS_META[status]
   const color = colorFor(meta.color)
@@ -591,7 +593,7 @@ function BookingBlock({
     >
       <div className="flex items-center gap-1.5 min-w-0">
         <span className="truncate text-[12.5px] font-bold">
-          {booking.player?.name ?? "—"}
+          {bookingPersonName(booking, t("walk_in_customer"))}
         </span>
         {booking.pitchSize && (
           <span
@@ -638,7 +640,7 @@ function PeekCard({ x, y, booking }: { x: number; y: number; booking: Booking })
         </span>
       </div>
       <div className="text-[14px] font-bold text-[hsl(var(--ink))] truncate">
-        {booking.player?.name ?? "—"}
+        {bookingPersonName(booking, t("walk_in_customer"))}
       </div>
       <div className="text-[12px] text-[hsl(var(--ink-2))] mt-0.5 mono">
         {fmtRange(start, end)} · {booking.duration ?? 0} {lang === "ar" ? "دقيقة" : "min"}

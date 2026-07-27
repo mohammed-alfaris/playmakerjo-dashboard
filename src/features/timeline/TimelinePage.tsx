@@ -38,8 +38,10 @@ type FilterId = "all" | StatusGroup
 export default function TimelinePage() {
   const { t, lang } = useT()
   const ownerFilter = useOwnerFilter()
-  const { isAdmin, isOwner } = useRole()
-  const canManage = isAdmin || isOwner
+  const { isStaff, canWrite } = useRole()
+  // Staff with "write" take bookings too — this used to be admin/owner only, which is
+  // precisely why a counter clerk could not do their job.
+  const canManage = canWrite
   const navigate = useNavigate()
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
   const [selectedId, setSelectedId] = useState<string>("")
@@ -159,7 +161,11 @@ export default function TimelinePage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5">
-          <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
+          {/* Staff run the schedule; they never see what it earns. "Can take bookings"
+              is about slots, not money. */}
+          {!isStaff && (
+            <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
+          )}
           <StatPill label={t("bookings_label")} value={counts.all} />
           {canManage && selectedVenue && (
             <Button

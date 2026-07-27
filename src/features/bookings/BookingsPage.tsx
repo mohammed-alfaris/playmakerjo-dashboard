@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX } from "lucide-react"
+import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 import { ProofReviewDialog } from "./ProofReviewDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -18,6 +18,7 @@ import { usePagination } from "@/hooks/usePagination"
 import { useOwnerFilter, useRole } from "@/hooks/useRole"
 import { BOOKING_STATUSES } from "@/lib/constants"
 import { formatCurrency, formatDateTime } from "@/lib/formatters"
+import { bookingPersonName, bookingPersonPhone } from "@/lib/bookingParty"
 import { useT } from "@/i18n/LanguageContext"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 
@@ -159,8 +160,43 @@ export default function BookingsPage() {
       : []),
     {
       accessorKey: "player",
-      header: t("player"),
-      cell: ({ row }) => row.original.player.name,
+      header: t("customer_name"),
+      cell: ({ row }) => {
+        const b = row.original
+        // On a manual booking `player` is the OWNER — the name of whoever typed it in.
+        // bookingPersonName prefers the customer record, then the legacy "Walk-in: …"
+        // fragment, and only then falls back to the player.
+        const name = bookingPersonName(b, t("walk_in_customer"))
+        const phone = bookingPersonPhone(b)
+        return (
+          <div className="min-w-0">
+            <div className="truncate text-sm">{name}</div>
+            {phone && (
+              <div className="truncate text-xs text-muted-foreground" dir="ltr">
+                {phone}
+              </div>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      id: "channel",
+      header: t("booking_channel"),
+      // Where the booking came from. Until this existed the two were indistinguishable
+      // once created — the flag was consumed at creation and thrown away.
+      cell: ({ row }) =>
+        row.original.isManual ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-2">
+            <Store className="h-3 w-3" />
+            {t("channel_counter")}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-medium text-brand-ink">
+            <Smartphone className="h-3 w-3" />
+            {t("channel_app")}
+          </span>
+        ),
     },
     {
       accessorKey: "sport",
@@ -210,7 +246,24 @@ export default function BookingsPage() {
     {
       accessorKey: "status",
       header: t("status"),
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      cell: ({ row }) => {
+        const b = row.original
+        // The backend cannot invent an "expired" status — "cancelled" is the only literal
+        // that frees a slot — so an auto-released hold arrives here indistinguishable from a
+        // customer who changed their mind. Saying "Cancelled" would be a small lie told to
+        // an owner about his own customer, so the badge reads the timestamp instead.
+        if (b.status === "cancelled" && b.autoCancelledAt) {
+          return (
+            <span
+              className="inline-flex items-center rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2"
+              title={t("status_expired_hint")}
+            >
+              {t("status_expired")}
+            </span>
+          )
+        }
+        return <StatusBadge status={b.status} />
+      },
     },
     {
       id: "payment",

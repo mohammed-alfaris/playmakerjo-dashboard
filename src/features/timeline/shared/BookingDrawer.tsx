@@ -13,6 +13,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge"
 import type { Booking } from "@/api/bookings"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
+import { bookingPersonName } from "@/lib/bookingParty"
 import { parseHHMM, fmtRange } from "@/lib/timelineDesign"
 
 // ---------------------------------------------------------------------------
@@ -65,7 +66,7 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
       <SheetContent side="right" className="w-[420px] sm:max-w-[420px]">
         <SheetHeader>
           <SheetTitle className="display tracking-[-0.02em]">
-            {booking.player?.name ?? "—"}
+            {bookingPersonName(booking, t("walk_in_customer"))}
           </SheetTitle>
         </SheetHeader>
         <div className="space-y-4 mt-4">
