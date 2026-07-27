@@ -49,10 +49,14 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
   const [expandedPitchId, setExpandedPitchId] = useState<string | null>(null)
   const [step, setStep] = useState(0)
 
+  // Admin only. This used to run for EVERY user who opened the dialog, fetching the roster
+  // of every other venue owner on the platform — a competitor list handed out as a side
+  // effect of editing your own venue. (The API refuses it for owners now; this stops the
+  // pointless 403 and makes the intent explicit.)
   const { data: usersData } = useQuery({
     queryKey: ["users-owners"],
     queryFn: () => getUsers({ role: "venue_owner", limit: 100 }),
-    enabled: open,
+    enabled: open && isAdmin,
   })
   const owners: Array<{ id: string; name: string }> = usersData?.data ?? []
 
