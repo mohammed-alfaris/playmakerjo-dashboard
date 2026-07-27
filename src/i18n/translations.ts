@@ -488,9 +488,9 @@ export const translations = {
     booking_no_show_failed: "Failed to mark booking as no-show",
     cancel_booking_confirm: "Cancel this booking?",
     booking_cancelled_toast: "Booking cancelled",
-    record_payment: "Record Payment",
-    record_payment_confirm: "Record {amount} as collected in cash?",
-    payment_recorded: "Payment recorded",
+    // Completing a booking collects any outstanding balance in the same action — the customer
+    // played and he paid. There is deliberately no separate "record payment" button.
+    mark_completed_and_collect_confirm: "Mark completed and record {amount} as collected in cash?",
     // Profile / Account settings
     nav_profile: "Profile",
     profile_settings: "Profile Settings",
@@ -1172,9 +1172,7 @@ export const translations = {
     booking_no_show_failed: "فشل في تسجيل عدم الحضور",
     cancel_booking_confirm: "إلغاء هذا الحجز؟",
     booking_cancelled_toast: "تم إلغاء الحجز",
-    record_payment: "تسجيل الدفع",
-    record_payment_confirm: "تسجيل {amount} كمبلغ تم تحصيله نقداً؟",
-    payment_recorded: "تم تسجيل الدفعة",
+    mark_completed_and_collect_confirm: "تأكيد الحضور وتسجيل {amount} كمبلغ تم تحصيله نقداً؟",
     // Profile / Account settings
     nav_profile: "الملف الشخصي",
     profile_settings: "إعدادات الحساب",

@@ -47,19 +47,9 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
     },
   })
 
+  // What tapping "completed" will collect. Completing is one act — he played and he paid —
+  // so the outstanding balance is settled by that same call, not a separate button.
   const remaining = Math.max(0, (booking.totalAmount ?? booking.amount) - (booking.amountPaid ?? 0))
-  const settle = useMutation({
-    mutationFn: () => api.patch(`/bookings/${booking.id}/settle-balance`),
-    onSuccess: () => {
-      toast.success(t("payment_recorded"))
-      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
-      qc.invalidateQueries({ queryKey: ["venue-slots"] })
-      qc.invalidateQueries({ queryKey: ["bookings"] })
-    },
-    onError: (e: { response?: { data?: { message?: string } } }) => {
-      toast.error(e.response?.data?.message ?? t("manual_booking_failed"))
-    },
-  })
 
   const cancel = useMutation({
     mutationFn: () => api.patch(`/bookings/${booking.id}/cancel`),
@@ -107,20 +97,6 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
             <Button size="sm" variant="outline" className="w-full" onClick={onView}>
               {t("view_drawer")}
             </Button>
-            {booking.status !== "cancelled" && remaining > 0.001 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full gap-1 text-[hsl(var(--amber-ink))]"
-                onClick={() => settle.mutate()}
-                disabled={settle.isPending}
-              >
-                {settle.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : null}
-                {t("record_payment")} ({formatCurrency(remaining)})
-              </Button>
-            )}
             {booking.status === "confirmed" && (
               <Button
                 size="sm"
@@ -131,7 +107,9 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
                 {complete.isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : null}
-                {t("mark_completed")}
+                {remaining > 0.001
+                  ? `${t("mark_completed")} (${formatCurrency(remaining)})`
+                  : t("mark_completed")}
               </Button>
             )}
             {["pending", "pending_payment", "pending_review", "confirmed"].includes(

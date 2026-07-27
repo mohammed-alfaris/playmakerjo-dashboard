@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone, Banknote } from "lucide-react"
+import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 import { ProofReviewDialog } from "./ProofReviewDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { getBookings, cancelSeries, cancelBooking, completeBooking, settleBalance, markNoShow, type Booking } from "@/api/bookings"
+import { getBookings, cancelSeries, cancelBooking, completeBooking, markNoShow, type Booking } from "@/api/bookings"
 import { getVenues, type Venue } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
 import { useOwnerFilter, useRole } from "@/hooks/useRole"
@@ -44,7 +44,6 @@ export default function BookingsPage() {
   const [cancelGroupId, setCancelGroupId] = useState<string | null>(null)
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
-  const [settleBookingId, setSettleBookingId] = useState<string | null>(null)
   const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { isAdmin, isOwner } = useRole()
@@ -78,17 +77,6 @@ export default function BookingsPage() {
       toast.success(t("booking_cancelled_toast"))
       queryClient.invalidateQueries({ queryKey: ["bookings"] })
       setCancelBookingId(null)
-    },
-    onError: (e: { response?: { data?: { message?: string } } }) =>
-      toast.error(e.response?.data?.message ?? t("manual_booking_failed")),
-  })
-
-  const settleMutation = useMutation({
-    mutationFn: (id: string) => settleBalance(id),
-    onSuccess: () => {
-      toast.success(t("payment_recorded"))
-      queryClient.invalidateQueries({ queryKey: ["bookings"] })
-      setSettleBookingId(null)
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e.response?.data?.message ?? t("manual_booking_failed")),
@@ -131,9 +119,11 @@ export default function BookingsPage() {
   const pagination          = data?.pagination ?? { page, limit, total: 0 }
   const venueOptions: Venue[] = venuesData?.data ?? []
 
-  const settleBooking = bookings.find((b) => b.id === settleBookingId)
-  const settleRemaining = settleBooking
-    ? Math.max(0, (settleBooking.totalAmount ?? settleBooking.amount) - (settleBooking.amountPaid ?? 0))
+  // What completing this booking will collect, shown in the confirm dialog so the amount is
+  // never a surprise after the fact.
+  const completeTarget = bookings.find((b) => b.id === completeBookingId)
+  const completeRemaining = completeTarget
+    ? Math.max(0, (completeTarget.totalAmount ?? completeTarget.amount) - (completeTarget.amountPaid ?? 0))
     : 0
 
   // Pitch filter/column only appear when the user has narrowed to a single
@@ -335,17 +325,6 @@ export default function BookingsPage() {
                 {t("review_proof")}
               </Button>
             )}
-            {b.status !== "cancelled" && remaining > 0.001 && (isAdmin || isOwner) && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-amber-600 border-amber-300 hover:bg-amber-50"
-                onClick={() => setSettleBookingId(b.id)}
-              >
-                <Banknote className="h-3 w-3 me-1" />
-                {t("record_payment")} ({formatCurrency(remaining)})
-              </Button>
-            )}
             {b.recurringGroupId && b.status !== "cancelled" && (
               <Button
                 size="sm"
@@ -366,7 +345,11 @@ export default function BookingsPage() {
                   onClick={() => setCompleteBookingId(b.id)}
                 >
                   <CheckCircle className="h-3 w-3 me-1" />
-                  {t("mark_completed")}
+                  {/* One tap = he played and he paid. The amount is on the button so the
+                      owner knows what he is collecting before he taps it. */}
+                  {remaining > 0.001
+                    ? `${t("mark_completed")} (${formatCurrency(remaining)})`
+                    : t("mark_completed")}
                 </Button>
                 <Button
                   size="sm"
@@ -532,7 +515,11 @@ export default function BookingsPage() {
 
       <ConfirmDialog
         title={t("mark_completed")}
-        description={t("mark_completed_confirm")}
+        description={
+          completeRemaining > 0.001
+            ? t("mark_completed_and_collect_confirm").replace("{amount}", formatCurrency(completeRemaining))
+            : t("mark_completed_confirm")
+        }
         open={!!completeBookingId}
         onOpenChange={(open) => { if (!open) setCompleteBookingId(null) }}
         onConfirm={() => completeBookingId && completeMutation.mutate(completeBookingId)}
@@ -558,14 +545,6 @@ export default function BookingsPage() {
         isLoading={cancelMutation.isPending}
       />
 
-      <ConfirmDialog
-        title={t("record_payment")}
-        description={t("record_payment_confirm").replace("{amount}", formatCurrency(settleRemaining))}
-        open={!!settleBookingId}
-        onOpenChange={(open) => { if (!open) setSettleBookingId(null) }}
-        onConfirm={() => settleBookingId && settleMutation.mutate(settleBookingId)}
-        isLoading={settleMutation.isPending}
-      />
     </div>
   )
 }
