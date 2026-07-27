@@ -22,6 +22,7 @@ const LeadsPage = lazy(() => import("@/features/leads/LeadsPage"))
 const StaffPage = lazy(() => import("@/features/staff/StaffPage"))
 const CustomersPage = lazy(() => import("@/features/customers/CustomersPage"))
 const CustomerReportPage = lazy(() => import("@/features/customers/CustomerReportPage"))
+const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"))
 
 function PageLoader() {
   return (
@@ -103,6 +104,7 @@ export const router = createBrowserRouter([
       // Staff reach this too — knowing who is on the phone is the counter clerk's job.
       { path: "customers",  element: <LazyPage><CustomersPage /></LazyPage> },
       { path: "customers/report", element: <LazyPage><CustomerReportPage /></LazyPage> },
+      { path: "customers/:id", element: <LazyPage><CustomerDetailPage /></LazyPage> },
       { path: "bookings",   element: <LazyPage><BookingsPage /></LazyPage> },
       { path: "payments",   element: <LazyPage><PaymentsPage /></LazyPage> },
       { path: "reports",        element: <LazyPage><ReportsPage /></LazyPage> },

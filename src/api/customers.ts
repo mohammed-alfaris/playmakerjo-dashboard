@@ -7,6 +7,9 @@ export interface CustomerStats {
   upcoming: number
   /** Only ever set by a human saying so — never inferred. */
   noShow: number
+  /** Raw status=="completed" count — distinct from `attended`, which also counts an
+   *  un-flagged past "confirmed" booking. Used for the detail page's status cards. */
+  completed: number
   cancelled: number
   unpaid: number
   amountOwed: number
@@ -43,6 +46,7 @@ export interface CustomerBookingItem {
   totalAmount: number
   amountPaid: number
   isManual: boolean
+  notes: string | null
 }
 
 export interface CustomerDetail extends Customer {
@@ -125,6 +129,17 @@ export async function getCustomerReport(month?: string): Promise<CustomerReport>
 export async function getCustomer(id: string): Promise<CustomerDetail> {
   const res = await api.get<{ data: CustomerDetail }>(`/customers/${id}`)
   return res.data.data
+}
+
+/** The detail page's full, paginated booking history — not capped at 50 like getCustomer's. */
+export async function getCustomerBookings(
+  id: string,
+  params: { page?: number; limit?: number; status?: string },
+): Promise<Paginated<CustomerBookingItem[]>> {
+  const res = await api.get<Paginated<CustomerBookingItem[]>>(`/customers/${id}/bookings`, {
+    params,
+  })
+  return res.data
 }
 
 export async function updateCustomer(

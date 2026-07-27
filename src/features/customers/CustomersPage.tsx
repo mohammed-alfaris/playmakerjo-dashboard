@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { Search, Contact2, AlertTriangle, BarChart3, Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,6 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { usePagination } from "@/hooks/usePagination"
 import { useT } from "@/i18n/LanguageContext"
 import { formatDate, formatCurrency } from "@/lib/formatters"
-import CustomerDetailSheet from "./CustomerDetailSheet"
 
 const SEGMENTS: { key: CustomerSegment; labelKey: Parameters<ReturnType<typeof useT>["t"]>[0] }[] = [
   { key: "all", labelKey: "segment_all" },
@@ -23,11 +22,11 @@ const SEGMENTS: { key: CustomerSegment; labelKey: Parameters<ReturnType<typeof u
 
 export default function CustomersPage() {
   const { t } = useT()
+  const navigate = useNavigate()
   const { page, limit, setPage, resetPage } = usePagination()
   const [rawSearch, setRawSearch] = useState("")
   const [search, setSearch] = useState("")
   const [segment, setSegment] = useState<CustomerSegment>("all")
-  const [openId, setOpenId] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
   async function handleExport() {
@@ -229,11 +228,9 @@ export default function CustomersPage() {
           onPageChange={setPage}
           emptyMessage={t("customers_empty")}
           emptyIcon={Contact2}
-          onRowClick={(row) => setOpenId(row.id)}
+          onRowClick={(row) => navigate(`/customers/${row.id}`)}
         />
       )}
-
-      <CustomerDetailSheet customerId={openId} onClose={() => setOpenId(null)} />
     </div>
   )
 }
