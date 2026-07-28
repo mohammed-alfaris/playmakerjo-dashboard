@@ -19,7 +19,7 @@ import type { DayHours, DayOfWeek, OperatingHours } from "@/lib/types"
 export const HOURS_START = 8
 export const HOURS_END = 24
 export const PX_PER_MIN = 1.6
-export const LANE_H = 50
+export const LANE_H = 72
 
 // ---------- Status / group system ----------
 
