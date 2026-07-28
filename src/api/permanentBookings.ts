@@ -60,3 +60,33 @@ export async function cancelPermanentBooking(id: string): Promise<PermanentBooki
 export async function deletePermanentBooking(id: string): Promise<void> {
   await api.delete(`/permanent-bookings/${id}`)
 }
+
+export interface RecordedOccurrence {
+  bookingId: string
+  date: string
+  startTime: string
+  duration: number
+  totalAmount: number
+  amountPaid: number
+  customerName: string | null
+  status: string
+}
+
+/**
+ * Turns ONE week of a standing reservation into a real booking, so the group's money has
+ * somewhere to go.
+ *
+ * A standing reservation is a rule, not a booking — it blocks the slot every week and never
+ * becomes a row, so there was nothing to collect against and booking the slot normally was
+ * refused by the group's own reservation. Created unpaid: a weekly group pays cash on the
+ * night, and the booking sits in "owes money" until it is collected.
+ *
+ * Idempotent — a second call returns the booking already recorded.
+ */
+export async function recordStandingWeek(
+  permanentId: string,
+  date: string,
+): Promise<RecordedOccurrence> {
+  const res = await api.post(`/permanent-bookings/${permanentId}/record`, { date })
+  return res.data.data as RecordedOccurrence
+}

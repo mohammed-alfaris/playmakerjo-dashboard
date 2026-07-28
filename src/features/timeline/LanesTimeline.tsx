@@ -54,6 +54,12 @@ export interface LanesTimelineProps {
   onOpenBooking?: (booking: Booking) => void
   /** Hide the 4-status legend at the bottom (used by the compact variant). */
   hideLegend?: boolean
+  /**
+   * Clicking a standing block. A standing reservation is a rule with no money attached, so
+   * "recording" this week turns it into a real booking the owner can collect against.
+   * Omitted for read-only viewers, which also removes the pointer cursor.
+   */
+  onRecordStanding?: (permanent: PermanentBooking) => void
   /** Compact mode lowers label column width; used by the embedded profile timeline. */
   compact?: boolean
   /** Left label column width; defaults to 180 for full, 148 for compact. */
@@ -89,6 +95,7 @@ export function LanesTimeline({
   date,
   onCreate,
   onOpenBooking,
+  onRecordStanding,
   hideLegend,
   compact,
   labelWidth,
@@ -129,6 +136,17 @@ export function LanesTimeline({
     for (const pitch of pitches) {
       const laneCount = lanesFor(pitch)
       const pitchBookings: LaneItem[] = bookings
+        // A cancelled booking is not on the schedule. The server stopped counting it the
+        // moment it was cancelled — every occupancy predicate reads `Status != "cancelled"` —
+        // so drawing it as a block claims an hour is taken when it is free.
+        //
+        // It also hid live bookings: cancel 17:00 and rebook it, and the two rows land on
+        // the same lane of a single-lane pitch with the cancelled one painted over the real
+        // one. The owner sees his cancellation and not the booking he just took.
+        //
+        // no_show stays: that slot really was held and the customer really did not come,
+        // which is a fact about the day worth seeing.
+        .filter((b) => b.status !== "cancelled")
         .filter((b) => {
           if (b.pitchId) return b.pitchId === pitch.id
           // fallback: sport match (should not normally happen)
@@ -482,6 +500,7 @@ export function LanesTimeline({
                           pxPerMin={pxPerMin}
                           frameStart={frameStart}
                           frameEnd={frameEnd}
+                          onRecord={onRecordStanding}
                         />
                       ) : (
                         <BookingBlock
@@ -601,6 +620,7 @@ function PermanentBlock({
   pxPerMin,
   frameStart,
   frameEnd,
+  onRecord,
 }: {
   permanent: PermanentBooking
   startMin: number
@@ -610,6 +630,7 @@ function PermanentBlock({
   pxPerMin: number
   frameStart: number
   frameEnd: number
+  onRecord?: (p: PermanentBooking) => void
 }) {
   const { t, lang } = useT()
   const visibleStart = Math.max(startMin, frameStart)
@@ -626,7 +647,13 @@ function PermanentBlock({
 
   return (
     <div
-      className="absolute overflow-hidden rounded-md border border-dashed"
+      role={onRecord ? "button" : undefined}
+      tabIndex={onRecord ? 0 : undefined}
+      onClick={onRecord ? () => onRecord(permanent) : undefined}
+      className={cn(
+        "absolute overflow-hidden rounded-md border border-dashed",
+        onRecord && "cursor-pointer hover:border-solid hover:border-[hsl(var(--brand))]",
+      )}
       style={{
         insetInlineStart: (visibleStart - frameStart) * pxPerMin,
         width: Math.max(2, (visibleEnd - visibleStart) * pxPerMin),

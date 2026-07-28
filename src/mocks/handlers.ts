@@ -530,6 +530,41 @@ const bookingHandlers = [
     return ok({ confirmed }, `${confirmed} booking(s) marked as attended`)
   }),
 
+  /**
+   * Cancel / complete / mark-paid were all missing, so the three actions in the booking
+   * drawer silently failed in mock mode — including the cancel-then-rebook sequence that
+   * exposed cancelled bookings still being drawn on the schedule.
+   */
+  http.patch(`${BASE}/bookings/:id/cancel`, async ({ params }) => {
+    await delay(250)
+    const b = bookings.find((x) => (x as { id: string }).id === params.id) as Record<string, unknown> | undefined
+    if (!b) return err("Booking not found", 404)
+    if (b.status === "cancelled") return err("Booking is already cancelled", 400)
+    b.status = "cancelled"
+    return ok(b, "Booking cancelled successfully")
+  }),
+
+  http.patch(`${BASE}/bookings/:id/complete`, async ({ params }) => {
+    await delay(250)
+    const b = bookings.find((x) => (x as { id: string }).id === params.id) as Record<string, unknown> | undefined
+    if (!b) return err("Booking not found", 404)
+    if (b.status !== "confirmed") return err(`Cannot complete a booking with status '${b.status}'`, 400)
+    // Completing collects, matching the server: "he played" and "he paid" are one moment.
+    b.amountPaid = b.totalAmount ?? b.amount
+    b.status = "completed"
+    return ok(b, "Booking completed")
+  }),
+
+  http.patch(`${BASE}/bookings/:id/mark-paid`, async ({ params }) => {
+    await delay(250)
+    const b = bookings.find((x) => (x as { id: string }).id === params.id) as Record<string, unknown> | undefined
+    if (!b) return err("Booking not found", 404)
+    if (b.status === "cancelled") return err("Cannot settle a cancelled booking", 400)
+    b.amountPaid = b.totalAmount ?? b.amount
+    b.depositPaid = true
+    return ok(b, "Marked as paid")
+  }),
+
   http.patch(`${BASE}/bookings/:id/no-show`, async ({ params }) => {
     await delay(300)
     const b = bookings.find((x) => x.id === params.id) as Record<string, unknown> | undefined
