@@ -112,6 +112,22 @@ export async function completeBooking(id: string) {
   return res.data.data as Booking
 }
 
+/**
+ * Records that the outstanding balance has been collected, without completing the booking.
+ *
+ * The endpoint has existed and been tested since the payment ledger landed; nothing called
+ * it, so a booking taken as "pays on arrival" read as owing forever even after the cash was
+ * in the drawer. Settles the FULL remaining amount — partial payments are deliberately not
+ * offered here.
+ *
+ * Idempotent server-side: a second call returns 200 and writes no second ledger row, so a
+ * double-tap on a slow connection cannot book the takings twice.
+ */
+export async function markBookingPaid(id: string) {
+  const res = await api.patch(`/bookings/${id}/mark-paid`)
+  return res.data.data as Booking
+}
+
 export async function markNoShow(id: string) {
   const res = await api.patch(`/bookings/${id}/no-show`)
   return res.data.data as Booking

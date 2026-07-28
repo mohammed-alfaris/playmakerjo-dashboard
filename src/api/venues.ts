@@ -57,7 +57,6 @@ export interface Venue {
   // Per-sport config — keyed by sport name. Empty = single-sport mode.
   sportsConfig?: Record<string, SportConfig>
   // When true, bookings for different sports don't collide (side-by-side courts).
-  sportsIsolated?: boolean
   // Multi-pitch venues carry a non-empty pitches[] (e.g. Shabab Jordan: 2×6-aside + 1×7-aside).
   // Legacy venues arrive with an array synthesised server-side from the venue-level
   // fields above — save always writes this array back.

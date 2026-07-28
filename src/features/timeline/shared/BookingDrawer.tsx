@@ -14,6 +14,7 @@ import type { Booking } from "@/api/bookings"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
 import { bookingPersonName } from "@/lib/bookingParty"
+import { markBookingPaid } from "@/api/bookings"
 import { parseHHMM, fmtRange } from "@/lib/timelineDesign"
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,24 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
   // What tapping "completed" will collect. Completing is one act — he played and he paid —
   // so the outstanding balance is settled by that same call, not a separate button.
   const remaining = Math.max(0, (booking.totalAmount ?? booking.amount) - (booking.amountPaid ?? 0))
+
+  // Collecting WITHOUT completing. Completing settles the balance too, but only works once
+  // the game has happened — a customer who pays when they walk in for a slot later today,
+  // or who settles a phone booking days ahead, had nowhere to be recorded. The booking sat
+  // reading "owes money" with the cash already in the drawer.
+  const markPaid = useMutation({
+    mutationFn: () => markBookingPaid(booking.id),
+    onSuccess: () => {
+      toast.success(t("payment_recorded"))
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      qc.invalidateQueries({ queryKey: ["payments"] })
+      qc.invalidateQueries({ queryKey: ["customers"] })
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? t("something_went_wrong"))
+    },
+  })
 
   const cancel = useMutation({
     mutationFn: () => api.patch(`/bookings/${booking.id}/cancel`),
@@ -110,6 +129,23 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
                 {remaining > 0.001
                   ? `${t("mark_completed")} (${formatCurrency(remaining)})`
                   : t("mark_completed")}
+              </Button>
+            )}
+
+            {/* Money in, game not played yet. Offered only when something is actually owed
+                and the booking is still live — settling a cancelled or no-show booking is
+                not a thing a counter does. */}
+            {remaining > 0.001 &&
+              ["pending", "pending_payment", "pending_review", "confirmed"].includes(booking.status) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full gap-1"
+                onClick={() => markPaid.mutate()}
+                disabled={markPaid.isPending}
+              >
+                {markPaid.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {`${t("record_payment")} (${formatCurrency(remaining)})`}
               </Button>
             )}
             {["pending", "pending_payment", "pending_review", "confirmed"].includes(

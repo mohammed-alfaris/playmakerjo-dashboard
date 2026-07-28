@@ -222,7 +222,6 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
         sizePrices: legacySplit.sizePrices,
         sportsConfig,
         pitches:    pitchesPayload,
-        sportsIsolated: derivedSports.length > 1,
       }
       // owner_id is admin-only on edit (the API 403s owner changes from
       // non-admins); owners always create venues as themselves.
