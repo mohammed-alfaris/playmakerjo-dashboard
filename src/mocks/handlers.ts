@@ -406,6 +406,72 @@ const customerHandlers = [
 
 // ─── Bookings ─────────────────────────────────────────────────────────────────
 const bookingHandlers = [
+  /**
+   * Taking a booking at the counter — the product's headline flow, and there was no mock
+   * handler for it at all. The request fell through to the real network and failed, so the
+   * whole AssignBookingDialog journey was untestable in mock mode: the one place it should
+   * be easiest to exercise.
+   *
+   * Deliberately enforces the capacity rule rather than accepting anything. A mock that
+   * always says yes cannot show you that the availability filter works, and would hide the
+   * exact double-booking the server exists to prevent.
+   */
+  http.post(`${BASE}/bookings`, async ({ request }) => {
+    await delay(300)
+    const b = await request.json() as Record<string, string | number | boolean | null>
+
+    const venueId = String(b.venueId ?? "")
+    const date = String(b.date ?? "")
+    const startTime = String(b.startTime ?? "")
+    const duration = Number(b.duration ?? 60)
+    const venue = venues.find((v) => v.id === venueId) as Record<string, unknown> | undefined
+    if (!venue) return err("Venue not found", 404)
+
+    const toMin = (hhmm: string) => {
+      const [h, m] = hhmm.split(":").map(Number)
+      return (h || 0) * 60 + (m || 0)
+    }
+    const start = toMin(startTime)
+    const end = start + duration
+
+    const clash = bookings.some((x) => {
+      const row = x as unknown as {
+        venue?: { id?: string }; venueId?: string; date?: string
+        status?: string; startTime?: string; duration?: number
+      }
+      if (row.venueId !== venueId && row.venue?.id !== venueId) return false
+      if (String(row.date ?? "").slice(0, 10) !== date) return false
+      if (row.status === "cancelled") return false
+      const s = toMin(String(row.startTime ?? "00:00"))
+      return s < end && start < s + Number(row.duration ?? 60)
+    })
+    if (clash) return err("That slot is already taken", 409)
+
+    const rate = Number(venue.pricePerHour ?? 0)
+    const amount = Math.round(rate * (duration / 60) * 1000) / 1000
+    const created = {
+      id: `b-mock-${Date.now().toString(36)}`,
+      venue: { id: venueId, name: String(venue.name ?? "") },
+      player: { id: "u2", name: "Khalid Al-Natour" },
+      customer: b.customerPhone
+        ? { id: `cus_mock_${Date.now().toString(36)}`, name: String(b.customerName ?? ""), phone: String(b.customerPhone) }
+        : null,
+      sport: String(b.sport ?? "football"),
+      date: `${date}T${startTime}:00Z`,
+      startTime,
+      duration,
+      amount,
+      totalAmount: amount,
+      amountPaid: b.customerPaid ? amount : 0,
+      isManual: !!b.isManual,
+      status: b.isManual ? "confirmed" : "pending_payment",
+      paymentMethod: String(b.paymentMethod ?? "cliq"),
+      createdAt: new Date().toISOString(),
+    }
+    bookings.unshift(created as never)
+    return ok(created, "Booking created successfully")
+  }),
+
   http.get(`${BASE}/bookings`, async ({ request }) => {
     await delay(400)
     const url = new URL(request.url)
@@ -421,8 +487,12 @@ const bookingHandlers = [
     let filtered = bookings
     if (status)   filtered = filtered.filter(b => b.status === status)
     if (venue_id) filtered = filtered.filter(b => b.venue.id === venue_id)
-    if (from)     filtered = filtered.filter(b => b.date >= from)
-    if (to)       filtered = filtered.filter(b => b.date <= to)
+    // Compare date-only. b.date is a full ISO instant ("2026-07-28T18:00:00Z") while from/to
+    // are "YYYY-MM-DD", so a raw string compare made every booking ON the `to` date sort
+    // AFTER the bound and vanish — the timeline asks for from=to=today, so it showed an
+    // empty day no matter what was booked.
+    if (from)     filtered = filtered.filter(b => b.date.slice(0, 10) >= from)
+    if (to)       filtered = filtered.filter(b => b.date.slice(0, 10) <= to)
     if (owner_id) {
       const ownerVenueIds = venues.filter(v => v.owner.id === owner_id).map(v => v.id)
       filtered = filtered.filter(b => ownerVenueIds.includes(b.venue.id))

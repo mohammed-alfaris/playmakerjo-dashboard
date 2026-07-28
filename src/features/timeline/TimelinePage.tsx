@@ -321,6 +321,10 @@ export default function TimelinePage() {
         <AssignBookingDialog
           venueId={selectedVenue.id}
           date={iso}
+          // Unfiltered by the status pills on purpose: a slot is taken whether or not the
+          // clerk is currently looking at that status.
+          dayBookings={bookings}
+          dayPermanents={permanents}
           bookingDate={selectedDate}
           preset={draftPreset}
           sports={selectedVenue.sports}

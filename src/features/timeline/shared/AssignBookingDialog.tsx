@@ -15,7 +15,9 @@ import CustomerPhoneField, { type CustomerDraft } from "@/features/customers/Cus
 import type { Pitch } from "@/api/venues"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
-import { parseHHMM, fmt12, hoursFor } from "@/lib/timelineDesign"
+import { parseHHMM, fmt12, hoursFor, slotFitsCapacity } from "@/lib/timelineDesign"
+import type { PermanentBooking } from "@/api/permanentBookings"
+import type { Booking } from "@/api/bookings"
 import type { OperatingHours } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
@@ -41,6 +43,13 @@ export interface AssignBookingDialogProps {
   maxDuration?: number
   /** Venue-level operating hours; pitch overrides are checked first. */
   operatingHours?: OperatingHours
+  /**
+   * What is already on the schedule for this day, so the time dropdown can stop offering
+   * slots that are visibly taken. Passed down rather than re-fetched: it is the exact data
+   * the user is looking at behind the dialog, so the two cannot disagree.
+   */
+  dayBookings?: Booking[]
+  dayPermanents?: PermanentBooking[]
   onClose: () => void
 }
 
@@ -55,6 +64,8 @@ export function AssignBookingDialog({
   minDuration,
   maxDuration,
   operatingHours,
+  dayBookings,
+  dayPermanents,
   onClose,
 }: AssignBookingDialogProps) {
   const { t } = useT()
@@ -124,6 +135,31 @@ export function AssignBookingDialog({
 
   // 30-min slot list within the day's open/close window. Latest start is
   // `close - duration` so the booking always fits before close.
+  // Everything already holding part of THIS pitch today: real bookings plus any standing
+  // weekly reservation that falls on this weekday.
+  const occupants = useMemo(() => {
+    if (!selectedPitch) return []
+    const dow = bookingDate?.getDay()
+    const fromBookings = (dayBookings ?? [])
+      .filter((b) => b.status !== "cancelled")
+      .filter((b) => (b.pitchId ? b.pitchId === selectedPitch.id
+                                : b.sport?.toLowerCase() === selectedPitch.sport.toLowerCase()))
+      .map((b) => ({ startMin: parseHHMM(b.startTime ?? "00:00"), duration: b.duration, pitchSize: b.pitchSize }))
+    const fromPermanents = (dayPermanents ?? [])
+      .filter((p) => p.status === "active" && p.dayOfWeek === dow)
+      .filter((p) => (p.pitchId ? p.pitchId === selectedPitch.id
+                                : p.sport?.toLowerCase() === selectedPitch.sport.toLowerCase()))
+      .map((p) => ({ startMin: parseHHMM(p.startTime), duration: p.duration, pitchSize: p.pitchSize }))
+    return [...fromBookings, ...fromPermanents]
+  }, [dayBookings, dayPermanents, selectedPitch, bookingDate])
+
+  // 30-min slot list within the day's open/close window. Latest start is
+  // `close - duration` so the booking always fits before close.
+  //
+  // Now also drops anything the pitch has no room for. It used to offer every half hour the
+  // venue was open regardless of what was booked, so a clerk could pick a taken time, fill
+  // in the customer's name and phone, hit save, and only then be told no — with the customer
+  // still on the line. The schedule behind the dialog was showing the conflict the whole time.
   const startOptions = useMemo(() => {
     if (!dayHours) return []
     const open = parseHHMM(dayHours.open)
@@ -131,9 +167,13 @@ export function AssignBookingDialog({
     if (close <= open) close += 24 * 60 // overnight (e.g. open 18:00, close 02:00)
     const last = close - duration
     const out: number[] = []
-    for (let m = open; m <= last; m += 30) out.push(m)
+    for (let m = open; m <= last; m += 30) {
+      if (!selectedPitch || slotFitsCapacity(selectedPitch, occupants, m, duration, pitchSize)) {
+        out.push(m)
+      }
+    }
     return out
-  }, [dayHours, duration])
+  }, [dayHours, duration, selectedPitch, occupants, pitchSize])
 
   // Snap startMin to a valid 30-min slot whenever the available slots change
   // (date, pitch, or duration changed). Avoids leaving the select on a value

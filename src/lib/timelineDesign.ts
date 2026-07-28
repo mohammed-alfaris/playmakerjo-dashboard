@@ -279,6 +279,56 @@ export function assignLanes<B extends LaneBooking>(
 // ---------- Booking shape adapter ----------
 
 /** Map a real Booking -> lane-ready numeric slot. */
+/** Anything already holding part of a pitch: a booking, or a standing reservation. */
+export interface Occupant {
+  startMin: number
+  duration: number
+  pitchSize?: string | null
+}
+
+/**
+ * Would one more booking of this size fit at this time?
+ *
+ * Mirrors the server's capacity rule (AvailabilityHelper.PitchHasCapacity): a pitch is
+ * worth N units, each overlapping booking consumes the weight of its size, and the new
+ * booking fits only if the total stays within budget. An 11-a-side is 4 units, so it can
+ * hold four 5-a-side games at once, or one 11 and nothing else.
+ *
+ * This is a UX filter, NOT the safety mechanism. The server re-checks inside a venue row
+ * lock and is the only thing that actually prevents a double booking — two clerks picking
+ * the same slot in the same second will still see one of them refused, correctly. The point
+ * here is that the dropdown should not OFFER a time that is visibly taken on the schedule
+ * behind it: the clerk had to fill in the whole form and hit save to find out.
+ *
+ * Because it is a mirror, it can drift from the server. Keep the two rules together.
+ */
+export function slotFitsCapacity(
+  pitch: Pick<Pitch, "sport" | "parentSize" | "subSizes">,
+  occupants: Occupant[],
+  startMin: number,
+  duration: number,
+  pitchSize?: string | null,
+): boolean {
+  const capacity = lanesFor(pitch)
+  const sizes = [pitch.parentSize, ...(pitch.subSizes ?? [])].filter(Boolean) as string[]
+  const smallest = sizes.length
+    ? Math.min(...sizes.map((s) => UNIT_WEIGHT[s] ?? 1))
+    : 1
+
+  const unitsOf = (size?: string | null) => {
+    if (capacity === 1) return 1
+    const w = UNIT_WEIGHT[size || pitch.parentSize || ""] ?? 1
+    return Math.max(1, Math.floor(w / smallest))
+  }
+
+  const end = startMin + duration
+  const used = occupants
+    .filter((o) => o.startMin < end && startMin < o.startMin + o.duration)
+    .reduce((sum, o) => sum + unitsOf(o.pitchSize), 0)
+
+  return used + unitsOf(pitchSize) <= capacity
+}
+
 export function bookingToLane(b: Booking): LaneBooking {
   const startMin = parseHHMM(b.startTime ?? "00:00")
   return { id: b.id, startMin, duration: b.duration, pitchSize: b.pitchSize ?? undefined }

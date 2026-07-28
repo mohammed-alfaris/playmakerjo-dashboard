@@ -174,6 +174,42 @@ export const mockBookings = [
   },
 ]
 
+// Every venue is open 08:00-23:00, seven days. Without this the mock venues had NO
+// operatingHours at all, so the timeline's booking dialog rendered "the venue is closed on
+// this day" for every date and its time dropdown never appeared — the whole counter-booking
+// flow was untestable in mock mode, which is exactly where it should be easiest to test.
+const MOCK_HOURS = Object.fromEntries(
+  ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"]
+    .map((d) => [d, { open: "08:00", close: "23:00" }]),
+)
+
+mockVenues.forEach((v) => {
+  const record = v as Record<string, unknown>
+  if (!record.operatingHours) record.operatingHours = MOCK_HOURS
+  if (record.minBookingDuration == null) record.minBookingDuration = 60
+  if (record.maxBookingDuration == null) record.maxBookingDuration = 180
+
+  // The real API ALWAYS returns a pitches array — PitchSizes.ResolvedPitches synthesises a
+  // virtual one for legacy single-pitch venues, so no client ever sees a venue without it.
+  // The mock did not, so anything keyed on the selected pitch silently no-opped in dev:
+  // the timeline drew no lanes and the booking dialog could not work out capacity.
+  if (!record.pitches) {
+    const sports = (record.sports as string[] | undefined) ?? ["football"]
+    record.pitches = sports.map((sport, i) => ({
+      id: `legacy-${record.id}-${sport}`,
+      name: sports.length > 1 ? `${sport} court` : String(record.name ?? "Main pitch"),
+      sport,
+      pricePerHour: record.pricePerHour ?? 25,
+      // One 11-a-side that splits into 8 and 6, so the subdividable capacity path — four
+      // small games or one big one — is exercised in dev rather than only in production.
+      parentSize: sport === "football" && i === 0 ? "11" : null,
+      subSizes: sport === "football" && i === 0 ? ["8", "6"] : [],
+      sizePrices: sport === "football" && i === 0 ? { "8": 18, "6": 12 } : {},
+      operatingHours: null,
+    }))
+  }
+})
+
 // Mark roughly a third of the seeded bookings as taken at the counter, each linked to a
 // customer record. Without this every mock booking looks like an app booking and the two
 // channels are indistinguishable on screen — which is the exact thing the new column
