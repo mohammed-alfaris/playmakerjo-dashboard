@@ -513,6 +513,7 @@ export function LanesTimeline({
                           pxPerMin={pxPerMin}
                           frameStart={frameStart}
                           frameEnd={frameEnd}
+                          showSize={pitch.sport === "football"}
                           onClick={onOpenBooking}
                           onPeek={(b, ev) => setPeek({ x: ev.clientX, y: ev.clientY, booking: b })}
                           onPeekOut={() => setPeek(null)}
@@ -686,6 +687,7 @@ function BookingBlock({
   pxPerMin,
   frameStart,
   frameEnd,
+  showSize,
   onClick,
   onPeek,
   onPeekOut,
@@ -698,6 +700,9 @@ function BookingBlock({
   pxPerMin: number
   frameStart: number
   frameEnd: number
+  // "7v7" is football notation. Taken from the LANE's pitch, not booking.sport, because
+  // that field is nullable — a legacy football booking would lose its badge.
+  showSize?: boolean
   onClick?: (b: Booking) => void
   onPeek?: (b: Booking, ev: ReactMouseEvent) => void
   onPeekOut?: () => void
@@ -747,7 +752,7 @@ function BookingBlock({
         <span className="truncate text-[12.5px] font-bold">
           {bookingPersonName(booking, t("walk_in_customer"))}
         </span>
-        {booking.pitchSize && (
+        {showSize && booking.pitchSize && (
           <span
             className="text-[9.5px] font-bold px-1 py-[1px] rounded-[4px] shrink-0 text-white"
             style={{ background: color.bg }}
