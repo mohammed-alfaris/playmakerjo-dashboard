@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { getVenues, type Venue } from "@/api/venues"
 import { getBookings, type Booking } from "@/api/bookings"
+import { listPermanentBookings } from "@/api/permanentBookings"
 import { useRole, useOwnerFilter } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
@@ -83,6 +84,20 @@ export default function TimelinePage() {
     () => bookingsData?.data ?? [],
     [bookingsData]
   )
+
+  // Standing weekly reservations. Not keyed by date — a permanent has no date, so this is
+  // fetched once per venue and filtered to the weekday inside LanesTimeline.
+  //
+  // Until now the schedule never asked for these at all, while the server had always
+  // honoured them in its conflict scan. The two disagreed: the hour looked free here and
+  // the booking was refused at save, after the customer had been promised it.
+  const { data: permanents } = useQuery({
+    queryKey: ["timeline-permanents", effectiveId],
+    queryFn: () => listPermanentBookings(effectiveId, "active"),
+    enabled: !!effectiveId,
+    // They change rarely; refetching per date change would be pure noise.
+    staleTime: 5 * 60_000,
+  })
 
   // Group counts for the filter pills
   const counts = useMemo(() => {
@@ -283,6 +298,9 @@ export default function TimelinePage() {
         <LanesTimeline
           venue={selectedVenue}
           bookings={visibleBookings}
+          // Not filtered by the status pills: a standing reservation has no status to
+          // filter on, and hiding it would put the clerk right back where they started.
+          permanents={permanents}
           date={selectedDate}
           canManage={canManage && !isPastDate}
           onCreate={(args) => {

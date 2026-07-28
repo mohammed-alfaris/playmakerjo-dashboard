@@ -12,6 +12,8 @@ export interface PermanentBooking {
   startTime: string
   duration: number
   label: string | null
+  /** The server has always sent this; the interface simply never declared it. */
+  labelAr: string | null
   status: "active" | "cancelled"
   createdByUserId: string
   createdAt: string

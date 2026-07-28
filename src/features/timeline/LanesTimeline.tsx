@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react"
+import { Repeat } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Chip } from "@/components/shared/design/Chip"
 import {
@@ -11,6 +12,7 @@ import {
   colorFor,
   assignLanes,
   bookingToLane,
+  permanentToLane,
   renderStatusFor,
   lanesFor,
   hoursFor,
@@ -24,6 +26,7 @@ import { bookingPersonName } from "@/lib/bookingParty"
 import { useT } from "@/i18n/LanguageContext"
 import type { Pitch, Venue } from "@/api/venues"
 import type { Booking } from "@/api/bookings"
+import type { PermanentBooking } from "@/api/permanentBookings"
 
 // ---------------------------------------------------------------------------
 // LanesTimeline — the "Clean" Lanes grid (ported from timeslots-clean.jsx).
@@ -38,6 +41,12 @@ import type { Booking } from "@/api/bookings"
 export interface LanesTimelineProps {
   venue: Pick<Venue, "id" | "operatingHours" | "pitches" | "minBookingDuration">
   bookings: Booking[]
+  /**
+   * Standing weekly reservations for this venue. Filtered to the selected weekday here
+   * rather than by the caller, because they carry no date — a permanent is "this weekday,
+   * this time, every week, indefinitely".
+   */
+  permanents?: PermanentBooking[]
   date: Date
   /** Optional callback when the user clicks an open slot (or drags to select a range). */
   onCreate?: (args: { pitchId: string; sport: string; startMin: number; duration: number }) => void
@@ -55,15 +64,28 @@ export interface LanesTimelineProps {
 /** Snap unit for drag-create. The drag rectangle locks to multiples of this. */
 const SNAP_MIN = 15
 
+/**
+ * One block on the axis. Exactly one of the two payloads is set.
+ *
+ * A discriminated pair rather than synthesising fake Booking objects from permanents: a
+ * synthetic booking with an invented id looks real to every consumer, and clicking one
+ * would open a drawer for a row that does not exist. The type is what stops that.
+ */
+type LaneItem = ReturnType<typeof bookingToLane> & {
+  _orig: Booking | null
+  _perm: PermanentBooking | null
+}
+
 interface PitchRow {
   pitch: Pitch
   lanes: number
-  assignments: LaneAssignment<ReturnType<typeof bookingToLane> & { _orig: Booking }>[]
+  assignments: LaneAssignment<LaneItem>[]
 }
 
 export function LanesTimeline({
   venue,
   bookings,
+  permanents,
   date,
   onCreate,
   onOpenBooking,
@@ -106,7 +128,7 @@ export function LanesTimeline({
     const out: PitchRow[] = []
     for (const pitch of pitches) {
       const laneCount = lanesFor(pitch)
-      const pitchBookings: Array<ReturnType<typeof bookingToLane> & { _orig: Booking }> = bookings
+      const pitchBookings: LaneItem[] = bookings
         .filter((b) => {
           if (b.pitchId) return b.pitchId === pitch.id
           // fallback: sport match (should not normally happen)
@@ -117,13 +139,34 @@ export function LanesTimeline({
           if (overnight && lane.startMin < frameStart) {
             lane.startMin += 24 * 60
           }
-          return { ...lane, _orig: b }
+          return { ...lane, _orig: b, _perm: null }
         })
-      const assignments = assignLanes(pitch, pitchBookings)
+
+      // Standing weekly reservations for THIS weekday.
+      //
+      // They already block the slot server-side — the conflict scan has always consulted
+      // them — but the timeline never asked for them, so the hour rendered empty. A clerk
+      // saw a free slot, promised it on the phone, and only found out at save. Showing
+      // them is the whole point: the schedule has to agree with the server about what is
+      // taken. They go through the same lane allocator so a permanent genuinely consumes
+      // its capacity units on a subdividable pitch instead of overlapping a real booking.
+      const dow = date.getDay()
+      const pitchPermanents: LaneItem[] = (permanents ?? [])
+        .filter((p) => p.status === "active" && p.dayOfWeek === dow)
+        .filter((p) => (p.pitchId ? p.pitchId === pitch.id : p.sport?.toLowerCase() === pitch.sport.toLowerCase()))
+        .map((p) => {
+          const lane = permanentToLane(p)
+          if (overnight && lane.startMin < frameStart) {
+            lane.startMin += 24 * 60
+          }
+          return { ...lane, _orig: null, _perm: p }
+        })
+
+      const assignments = assignLanes(pitch, [...pitchBookings, ...pitchPermanents])
       out.push({ pitch, lanes: laneCount, assignments })
     }
     return out
-  }, [pitches, bookings, overnight, frameStart])
+  }, [pitches, bookings, permanents, date, overnight, frameStart])
 
   // NOW line: only show if date is today and the time is inside the frame
   const now = new Date()
@@ -427,11 +470,23 @@ export function LanesTimeline({
                         />
                       )}
 
-                      {/* Bookings */}
-                      {row.assignments.map((a) => (
+                      {/* Bookings and standing reservations */}
+                      {row.assignments.map((a) => a.booking._perm ? (
+                        <PermanentBlock
+                          key={a.booking.id}
+                          permanent={a.booking._perm}
+                          startMin={a.booking.startMin}
+                          duration={a.booking.duration}
+                          topLane={a.topLane}
+                          laneSpan={a.laneSpan}
+                          pxPerMin={pxPerMin}
+                          frameStart={frameStart}
+                          frameEnd={frameEnd}
+                        />
+                      ) : (
                         <BookingBlock
                           key={a.booking.id}
-                          booking={a.booking._orig}
+                          booking={a.booking._orig!}
                           startMin={a.booking.startMin}
                           duration={a.booking.duration}
                           topLane={a.topLane}
@@ -524,6 +579,70 @@ export function LanesTimeline({
 // ---------------------------------------------------------------------------
 // BookingBlock
 // ---------------------------------------------------------------------------
+
+/**
+ * A standing weekly reservation on the schedule.
+ *
+ * Deliberately NOT clickable and visually distinct from a booking — striped, muted, with a
+ * repeat glyph. It is not a booking: there is no row to open, no customer to call, no money
+ * attached, and no per-date instance to cancel. Making it look actionable would be a lie the
+ * first time someone tapped it.
+ *
+ * Cancelling a standing arrangement is a decision about every future week, so it stays where
+ * it belongs — the venue's Standing Bookings tab — rather than being reachable by a misclick
+ * on a Tuesday.
+ */
+function PermanentBlock({
+  permanent,
+  startMin,
+  duration,
+  topLane,
+  laneSpan,
+  pxPerMin,
+  frameStart,
+  frameEnd,
+}: {
+  permanent: PermanentBooking
+  startMin: number
+  duration: number
+  topLane: number
+  laneSpan: number
+  pxPerMin: number
+  frameStart: number
+  frameEnd: number
+}) {
+  const { t, lang } = useT()
+  const visibleStart = Math.max(startMin, frameStart)
+  const visibleEnd = Math.min(startMin + duration, frameEnd)
+  if (visibleEnd <= visibleStart) return null
+
+  const label = (lang === "ar" ? permanent.labelAr : permanent.label) || permanent.label
+
+  return (
+    <div
+      className="absolute overflow-hidden rounded-md border border-dashed"
+      style={{
+        insetInlineStart: (visibleStart - frameStart) * pxPerMin,
+        width: Math.max(2, (visibleEnd - visibleStart) * pxPerMin),
+        top: topLane * LANE_H + 3,
+        height: laneSpan * LANE_H - 6,
+        borderColor: "hsl(var(--ink-3) / 0.45)",
+        // Stripes rather than a flat tint: it reads as "reserved, not a booking" without
+        // needing a legend, and never collides with a status colour.
+        backgroundImage:
+          "repeating-linear-gradient(45deg, hsl(var(--surface-2)) 0 6px, hsl(var(--surface-1)) 6px 12px)",
+      }}
+      title={`${t("permanent_weekly")}${label ? ` — ${label}` : ""} · ${fmtRange(startMin, startMin + duration)}`}
+    >
+      <div className="flex h-full items-center gap-1 px-1.5">
+        <Repeat className="h-3 w-3 shrink-0 text-[hsl(var(--ink-3))]" />
+        <span className="truncate text-[10.5px] font-medium text-[hsl(var(--ink-2))]">
+          {label || t("permanent_weekly")}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 function BookingBlock({
   booking,

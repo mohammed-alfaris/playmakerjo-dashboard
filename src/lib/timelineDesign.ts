@@ -7,6 +7,7 @@
 
 import type { Pitch, Venue } from "@/api/venues"
 import type { Booking } from "@/api/bookings"
+import type { PermanentBooking } from "@/api/permanentBookings"
 import type { DayHours, DayOfWeek, OperatingHours } from "@/lib/types"
 
 // ---------- Layout constants ----------
@@ -281,6 +282,23 @@ export function assignLanes<B extends LaneBooking>(
 export function bookingToLane(b: Booking): LaneBooking {
   const startMin = parseHHMM(b.startTime ?? "00:00")
   return { id: b.id, startMin, duration: b.duration, pitchSize: b.pitchSize ?? undefined }
+}
+
+/**
+ * A standing weekly reservation, positioned on the same minute axis as a booking so the
+ * lane allocator can place both and a permanent genuinely consumes capacity units on a
+ * subdividable pitch.
+ *
+ * Permanents carry no date — they are "this weekday, this hour, every week" with no end —
+ * so the caller filters by weekday before calling this.
+ */
+export function permanentToLane(p: PermanentBooking): LaneBooking {
+  return {
+    id: p.id,
+    startMin: parseHHMM(p.startTime ?? "00:00"),
+    duration: p.duration,
+    pitchSize: p.pitchSize ?? undefined,
+  }
 }
 
 /** Consolidate a raw booking.status into the 4-group + tint color. */
