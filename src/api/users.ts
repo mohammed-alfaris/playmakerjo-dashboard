@@ -19,6 +19,11 @@ export interface CreateUserPayload {
   phone?: string
   role: string
   permissions?: "read" | "write"
+  /**
+   * Required by the server when role is venue_staff. Omitting it 400s — which is exactly
+   * what the admin dialog used to do, silently, because the field did not exist here.
+   */
+  managedByOwnerId?: string
 }
 
 export interface UsersParams {
