@@ -616,7 +616,13 @@ function PermanentBlock({
   const visibleEnd = Math.min(startMin + duration, frameEnd)
   if (visibleEnd <= visibleStart) return null
 
-  const label = (lang === "ar" ? permanent.labelAr : permanent.label) || permanent.label
+  // The organiser's real name beats free text: a captured customer is a record with a phone
+  // and a history behind it, while the label is whatever someone typed once. Falls back to
+  // the label for rows created before standing bookings captured a customer.
+  const label =
+    permanent.customer?.name ||
+    (lang === "ar" ? permanent.labelAr : permanent.label) ||
+    permanent.label
 
   return (
     <div

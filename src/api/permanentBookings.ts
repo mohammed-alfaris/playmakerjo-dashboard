@@ -14,6 +14,8 @@ export interface PermanentBooking {
   label: string | null
   /** The server has always sent this; the interface simply never declared it. */
   labelAr: string | null
+  /** The organiser. Absent on rows created before standing bookings captured one. */
+  customer?: { id: string; name: string; phone: string } | null
   status: "active" | "cancelled"
   createdByUserId: string
   createdAt: string
@@ -27,6 +29,9 @@ export interface CreatePermanentBookingPayload {
   startTime: string
   duration: number
   label?: string | null
+  /** The organiser's mobile. Optional — a missing number must never block the booking. */
+  customerPhone?: string | null
+  customerName?: string | null
 }
 
 export async function listPermanentBookings(
