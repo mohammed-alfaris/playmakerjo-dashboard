@@ -103,10 +103,9 @@ export async function reviewProof(id: string, payload: { approved: boolean; note
  * Marks the booking completed AND collects any outstanding balance in the same call — one act
  * at the counter, because "he played" and "he paid" are the same moment.
  *
- * The API also exposes PATCH /bookings/{id}/settle-balance for collecting money WITHOUT
- * completing (a booking that isn't completable yet — upcoming, or still pending_payment).
- * The dashboard deliberately does not surface that as a second button; it exists for the
- * mobile owner app and for prepayment cases.
+ * For money WITHOUT completion (an upcoming slot prepaid, or a pending_payment booking settled
+ * at the counter) the API exposes PATCH /bookings/{id}/mark-paid. Nothing in the dashboard calls
+ * it yet — see GAP-ANALYSIS.md.
  */
 export async function completeBooking(id: string) {
   const res = await api.patch(`/bookings/${id}/complete`)
