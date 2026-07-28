@@ -234,6 +234,13 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
     onSuccess: () => {
       toast.success(isEdit ? t("venue_updated") : t("venue_created"))
       queryClient.invalidateQueries({ queryKey: ["venues"] })
+      // ["venues"] is NOT a prefix of ["venue", id] — TanStack matches key arrays
+      // element-wise and "venues" !== "venue" — so the detail page kept serving the
+      // pre-edit venue until a hard reload. Saving appeared to do nothing.
+      if (venue) {
+        queryClient.invalidateQueries({ queryKey: ["venue", venue.id] })
+        queryClient.invalidateQueries({ queryKey: ["venue-stats", venue.id] })
+      }
       onOpenChange(false)
       onSuccess?.()
     },
