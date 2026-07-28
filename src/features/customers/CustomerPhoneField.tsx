@@ -156,6 +156,20 @@ export function CustomerPhoneField({ value, onChange, onResolved, autoFocus, dis
         {lookup.isError && (
           <span className="text-[hsl(var(--ink-3))]">{t("customer_lookup_failed")}</span>
         )}
+
+        {/* A number that will never become a customer.
+            The server keeps the booking and silently drops the customer when the phone is
+            not a Jordanian mobile — a landline, a Gulf number, or one digit short. That is
+            the right call for the booking (never block a sale over a phone number) but it
+            was invisible: the clerk typed a number, saw nothing, and the name was gone.
+            Say so while they can still fix it. Deliberately not an error state — the
+            booking is fine, it is only the customer record that will not exist. */}
+        {!lookup.isFetching && !normalized && value.phone.replace(/\D/g, "").length >= 7 && (
+          <span className="inline-flex items-center gap-1 text-amber-ink">
+            <AlertTriangle className="h-3 w-3" />
+            {t("customer_phone_not_saved")}
+          </span>
+        )}
       </div>
     </div>
   )
