@@ -13,6 +13,8 @@ import { StatusBadge } from "@/components/shared/StatusBadge"
 import type { Booking } from "@/api/bookings"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
+import { bookingPersonName } from "@/lib/bookingParty"
+import { markBookingPaid } from "@/api/bookings"
 import { parseHHMM, fmtRange } from "@/lib/timelineDesign"
 
 // ---------------------------------------------------------------------------
@@ -46,6 +48,28 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
     },
   })
 
+  // What tapping "completed" will collect. Completing is one act — he played and he paid —
+  // so the outstanding balance is settled by that same call, not a separate button.
+  const remaining = Math.max(0, (booking.totalAmount ?? booking.amount) - (booking.amountPaid ?? 0))
+
+  // Collecting WITHOUT completing. Completing settles the balance too, but only works once
+  // the game has happened — a customer who pays when they walk in for a slot later today,
+  // or who settles a phone booking days ahead, had nowhere to be recorded. The booking sat
+  // reading "owes money" with the cash already in the drawer.
+  const markPaid = useMutation({
+    mutationFn: () => markBookingPaid(booking.id),
+    onSuccess: () => {
+      toast.success(t("payment_recorded"))
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      qc.invalidateQueries({ queryKey: ["payments"] })
+      qc.invalidateQueries({ queryKey: ["customers"] })
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? t("something_went_wrong"))
+    },
+  })
+
   const cancel = useMutation({
     mutationFn: () => api.patch(`/bookings/${booking.id}/cancel`),
     onSuccess: () => {
@@ -65,7 +89,7 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
       <SheetContent side="right" className="w-[420px] sm:max-w-[420px]">
         <SheetHeader>
           <SheetTitle className="display tracking-[-0.02em]">
-            {booking.player?.name ?? "—"}
+            {bookingPersonName(booking, t("walk_in_customer"))}
           </SheetTitle>
         </SheetHeader>
         <div className="space-y-4 mt-4">
@@ -102,7 +126,36 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
                 {complete.isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : null}
-                {t("mark_completed")}
+                {remaining > 0.001
+                  ? `${t("mark_completed")} (${formatCurrency(remaining)})`
+                  : t("mark_completed")}
+              </Button>
+            )}
+
+            {/* Anything that is owed, not cancelled, and NOT already offering "attended".
+                "confirmed" is deliberately absent: that is the one state where the button
+                above is shown, and there it already collects the full balance as it
+                completes — two buttons doing the same job in the common case.
+
+                The rest of the list is load-bearing, not leftovers. Complete refuses any
+                booking that is not confirmed, so for these states it is the ONLY way money
+                can be recorded:
+                  - pending / pending_payment / pending_review — paying before confirmation
+                  - completed — the bulk "everyone came" prompt completes without touching
+                    money, so a bulk-confirmed session would otherwise read as owing forever
+                    with no screen able to settle it.
+                No-show is excluded: he did not come, so there is nothing to collect for. */}
+            {remaining > 0.001 &&
+              ["pending", "pending_payment", "pending_review", "completed"].includes(booking.status) && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full gap-1"
+                onClick={() => markPaid.mutate()}
+                disabled={markPaid.isPending}
+              >
+                {markPaid.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {`${t("record_payment")} (${formatCurrency(remaining)})`}
               </Button>
             )}
             {["pending", "pending_payment", "pending_review", "confirmed"].includes(

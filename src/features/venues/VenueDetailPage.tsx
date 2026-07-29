@@ -21,7 +21,7 @@ import {
 import { useAuthStore } from "@/store/authStore"
 import { getVenue, getVenueStats, type Pitch, type Venue } from "@/api/venues"
 import { getPayments, type Payment } from "@/api/payments"
-import { getReviews, type Review } from "@/api/reviews"
+import { getReviews, getVenueReviews, type Review } from "@/api/reviews"
 import { usePagination } from "@/hooks/usePagination"
 import { formatCurrency } from "@/lib/formatters"
 import { useT } from "@/i18n/LanguageContext"
@@ -93,9 +93,16 @@ export default function VenueDetailPage() {
     return Math.round(utilizationFor(venue, todayBookings, new Date()) * 100)
   }, [venue, todayBookings])
 
+  // The tab renders for every role, but /reviews/admin is super_admin only — so an owner
+  // opening the Reviews tab on their OWN venue got a 403 and an empty list. Admins keep the
+  // moderation view; everyone else reads the per-venue endpoint.
+  const isPlatformAdmin = useAuthStore((s) => s.user)?.role === "super_admin"
   const { data: reviewsData, isLoading: reviewsLoading } = useQuery({
-    queryKey: ["venue-reviews", id],
-    queryFn: () => getReviews({ venueId: id, page: 1, limit: 20 }),
+    queryKey: ["venue-reviews", id, isPlatformAdmin],
+    queryFn: () =>
+      isPlatformAdmin
+        ? getReviews({ venueId: id, page: 1, limit: 20 })
+        : getVenueReviews(id!, { page: 1, limit: 20 }),
     enabled: !!id,
   })
   const reviews: Review[] = useMemo(() => reviewsData?.data ?? [], [reviewsData])

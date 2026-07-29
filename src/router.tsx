@@ -19,6 +19,10 @@ const TimelinePage = lazy(() => import("@/features/timeline/TimelinePage"))
 const MapPage = lazy(() => import("@/features/map/MapPage"))
 const SettingsPage = lazy(() => import("@/features/settings/SettingsPage"))
 const LeadsPage = lazy(() => import("@/features/leads/LeadsPage"))
+const StaffPage = lazy(() => import("@/features/staff/StaffPage"))
+const CustomersPage = lazy(() => import("@/features/customers/CustomersPage"))
+const CustomerReportPage = lazy(() => import("@/features/customers/CustomerReportPage"))
+const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"))
 
 function PageLoader() {
   return (
@@ -51,6 +55,28 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+/**
+ * Owner-only pages. Staff must not reach these — "My Team" is where an owner hires and
+ * suspends people, so a clerk who could open it could promote themselves. The server
+ * enforces the same rule; this only avoids showing a screen that would 403.
+ */
+function OwnerRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  if (user?.role !== "venue_owner") return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+/**
+ * The dashboard is entirely revenue and portfolio cards, all gated to admin/owner, so a
+ * staff member landing on it saw a blank page. Send them to the schedule — the screen
+ * they actually work in all day.
+ */
+function HomeRoute() {
+  const user = useAuthStore((s) => s.user)
+  if (user?.role === "venue_staff") return <Navigate to="/timeline" replace />
+  return <LazyPage><DashboardPage /></LazyPage>
+}
+
 export const router = createBrowserRouter([
   {
     path: "/login",
@@ -68,14 +94,19 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <LazyPage><DashboardPage /></LazyPage> },
+      { index: true, element: <HomeRoute /> },
       { path: "venues",     element: <LazyPage><VenuesPage /></LazyPage> },
       { path: "venues/:id", element: <LazyPage><VenueDetailPage /></LazyPage> },
       { path: "timeline",   element: <LazyPage><TimelinePage /></LazyPage> },
       { path: "map",        element: <AdminRoute><LazyPage><MapPage /></LazyPage></AdminRoute> },
       { path: "users",      element: <AdminRoute><LazyPage><UsersPage /></LazyPage></AdminRoute> },
+      { path: "staff",      element: <OwnerRoute><LazyPage><StaffPage /></LazyPage></OwnerRoute> },
+      // Staff reach this too — knowing who is on the phone is the counter clerk's job.
+      { path: "customers",  element: <LazyPage><CustomersPage /></LazyPage> },
+      { path: "customers/report", element: <LazyPage><CustomerReportPage /></LazyPage> },
+      { path: "customers/:id", element: <LazyPage><CustomerDetailPage /></LazyPage> },
       { path: "bookings",   element: <LazyPage><BookingsPage /></LazyPage> },
-      { path: "payments",   element: <AdminRoute><LazyPage><PaymentsPage /></LazyPage></AdminRoute> },
+      { path: "payments",   element: <LazyPage><PaymentsPage /></LazyPage> },
       { path: "reports",        element: <LazyPage><ReportsPage /></LazyPage> },
       { path: "notifications", element: <AdminRoute><LazyPage><NotificationsPage /></LazyPage></AdminRoute> },
       { path: "reviews",    element: <AdminRoute><LazyPage><ReviewsPage /></LazyPage></AdminRoute> },

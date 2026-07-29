@@ -1,14 +1,16 @@
 import { useMemo, useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import {
   Plus,
   CalendarDays,
 } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { getVenues, type Venue } from "@/api/venues"
 import { getBookings, type Booking } from "@/api/bookings"
+import { listPermanentBookings, recordStandingWeek, type PermanentBooking } from "@/api/permanentBookings"
 import { useRole, useOwnerFilter } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
@@ -38,8 +40,10 @@ type FilterId = "all" | StatusGroup
 export default function TimelinePage() {
   const { t, lang } = useT()
   const ownerFilter = useOwnerFilter()
-  const { isAdmin, isOwner } = useRole()
-  const canManage = isAdmin || isOwner
+  const { isStaff, canWrite } = useRole()
+  // Staff with "write" take bookings too — this used to be admin/owner only, which is
+  // precisely why a counter clerk could not do their job.
+  const canManage = canWrite
   const navigate = useNavigate()
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
   const [selectedId, setSelectedId] = useState<string>("")
@@ -52,6 +56,28 @@ export default function TimelinePage() {
   } | null>(null)
   const [drawerBooking, setDrawerBooking] = useState<Booking | null>(null)
   const [filter, setFilter] = useState<FilterId>("all")
+  const qc = useQueryClient()
+
+  /**
+   * Turn this week of a standing reservation into a real booking.
+   *
+   * The rule blocks the slot every week and never becomes a row, so until now the group's
+   * cash had nowhere to go: no booking to collect against, and booking the slot normally
+   * was refused by the group's own reservation. Created unpaid — a weekly group pays on
+   * the night — so it lands in "owes money" until the counter collects.
+   */
+  const recordWeek = useMutation({
+    mutationFn: (p: PermanentBooking) => recordStandingWeek(p.id, iso),
+    onSuccess: (rec) => {
+      toast.success(t("standing_recorded").replace("{amount}", String(rec.totalAmount)))
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      qc.invalidateQueries({ queryKey: ["customers"] })
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? t("something_went_wrong"))
+    },
+  })
 
   const { data: venuesData, isLoading: venuesLoading } = useQuery({
     queryKey: ["timeline-venues", ownerFilter],
@@ -81,6 +107,20 @@ export default function TimelinePage() {
     () => bookingsData?.data ?? [],
     [bookingsData]
   )
+
+  // Standing weekly reservations. Not keyed by date — a permanent has no date, so this is
+  // fetched once per venue and filtered to the weekday inside LanesTimeline.
+  //
+  // Until now the schedule never asked for these at all, while the server had always
+  // honoured them in its conflict scan. The two disagreed: the hour looked free here and
+  // the booking was refused at save, after the customer had been promised it.
+  const { data: permanents } = useQuery({
+    queryKey: ["timeline-permanents", effectiveId],
+    queryFn: () => listPermanentBookings(effectiveId, "active"),
+    enabled: !!effectiveId,
+    // They change rarely; refetching per date change would be pure noise.
+    staleTime: 5 * 60_000,
+  })
 
   // Group counts for the filter pills
   const counts = useMemo(() => {
@@ -159,7 +199,11 @@ export default function TimelinePage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5">
-          <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
+          {/* Staff run the schedule; they never see what it earns. "Can take bookings"
+              is about slots, not money. */}
+          {!isStaff && (
+            <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
+          )}
           <StatPill label={t("bookings_label")} value={counts.all} />
           {canManage && selectedVenue && (
             <Button
@@ -277,6 +321,11 @@ export default function TimelinePage() {
         <LanesTimeline
           venue={selectedVenue}
           bookings={visibleBookings}
+          // Not filtered by the status pills: a standing reservation has no status to
+          // filter on, and hiding it would put the clerk right back where they started.
+          permanents={permanents}
+          // Only offered to someone who can take money, and never for a past day.
+          onRecordStanding={canManage && !isPastDate ? (p) => recordWeek.mutate(p) : undefined}
           date={selectedDate}
           canManage={canManage && !isPastDate}
           onCreate={(args) => {
@@ -297,6 +346,10 @@ export default function TimelinePage() {
         <AssignBookingDialog
           venueId={selectedVenue.id}
           date={iso}
+          // Unfiltered by the status pills on purpose: a slot is taken whether or not the
+          // clerk is currently looking at that status.
+          dayBookings={bookings}
+          dayPermanents={permanents}
           bookingDate={selectedDate}
           preset={draftPreset}
           sports={selectedVenue.sports}

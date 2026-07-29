@@ -8,6 +8,7 @@ import { Sidebar } from "./Sidebar"
 import { TopHeader } from "./TopHeader"
 import { QuickActionFab } from "./QuickActionFab"
 import { AnnouncementsBanner } from "./AnnouncementsBanner"
+import { AttendancePrompt } from "./AttendancePrompt"
 import { CommandPalette } from "./CommandPalette"
 
 export default function AppLayout() {
@@ -55,6 +56,9 @@ export default function AppLayout() {
           />
 
           <AnnouncementsBanner />
+          {/* Sits above every page on purpose: yesterday's unanswered slots should be the
+              first thing seen, whichever screen the owner or clerk opens. */}
+          <AttendancePrompt />
 
           <main className="flex-1 overflow-y-auto p-6">
             <Outlet />

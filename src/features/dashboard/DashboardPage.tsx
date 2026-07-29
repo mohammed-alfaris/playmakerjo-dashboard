@@ -11,6 +11,7 @@ import { getBookings } from "@/api/bookings"
 import { useAuth } from "@/hooks/useAuth"
 import { useRole, useOwnerFilter } from "@/hooks/useRole"
 import { formatCurrency } from "@/lib/formatters"
+import { bookingPersonName } from "@/lib/bookingParty"
 import { useT } from "@/i18n/LanguageContext"
 import { cn } from "@/lib/utils"
 
@@ -339,9 +340,10 @@ function SportsMixCard() {
 function TopVenuesCard() {
   const { t } = useT()
   const navigate = useNavigate()
+  const ownerFilter = useOwnerFilter()
   const { data, isLoading } = useQuery({
-    queryKey: ["top-venues"],
-    queryFn: () => getTopVenues(),
+    queryKey: ["top-venues", ownerFilter],
+    queryFn: () => getTopVenues(ownerFilter),
   })
   const rows = data?.data ?? []
   const max = Math.max(1, ...rows.map((r) => r.revenue))
@@ -389,10 +391,16 @@ function TopVenuesCard() {
 // ───────────────────────────────────────────────────────────────────────────
 // Activity Feed — recent bookings with pulse "LIVE" dot
 // ───────────────────────────────────────────────────────────────────────────
+// Locally redeclared rather than imported, which is why it silently missed `customer`
+// and rendered the owner's own name on every walk-in. Kept local but widened to the
+// fields bookingPersonName actually needs.
 interface FeedBooking {
   id: string
   venue: { name: string }
   player: { name: string }
+  customer?: { id: string; name: string; phone: string } | null
+  notes?: string | null
+  isManual?: boolean
   sport: string
   date: string
   status: string
@@ -439,7 +447,9 @@ function ActivityFeedCard({ ownerFilter, lang }: { ownerFilter: { owner_id?: str
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] leading-tight">
-                  <span className="font-semibold text-ink">{b.player.name}</span>
+                  <span className="font-semibold text-ink">
+                    {bookingPersonName(b, t("walk_in_customer"))}
+                  </span>
                   <span className="text-ink-3"> · </span>
                   <span className="font-medium text-ink-2">{b.venue.name}</span>
                 </div>

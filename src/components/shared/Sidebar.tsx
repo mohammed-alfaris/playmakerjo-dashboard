@@ -4,6 +4,8 @@ import {
   MapPin,
   Map as MapIcon,
   Users,
+  UserCog,
+  Contact2,
   CalendarCheck,
   CalendarClock,
   CreditCard,
@@ -34,19 +36,27 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
   {
     labelKey: null,
     items: [
+      // venue_staff get the day-to-day surfaces only: the schedule and the bookings.
+      // No venues (they don't set prices), no reports (they don't see revenue), and no
+      // dashboard — every card on it is revenue or portfolio, so for staff it rendered
+      // completely empty. They are sent to the schedule instead, which is their actual job.
       { href: "/",         labelKey: "nav_dashboard", icon: LayoutDashboard, roles: ["super_admin", "venue_owner"] },
       { href: "/venues",   labelKey: "nav_venues",    icon: MapPin,          roles: ["super_admin", "venue_owner"] },
       { href: "/map",      labelKey: "nav_map",       icon: MapIcon,         roles: ["super_admin"] },
-      { href: "/timeline", labelKey: "slot_timeline", icon: CalendarClock,   roles: ["super_admin", "venue_owner"] },
-      { href: "/bookings", labelKey: "nav_bookings",  icon: CalendarCheck,   roles: ["super_admin", "venue_owner"] },
+      { href: "/timeline", labelKey: "slot_timeline", icon: CalendarClock,   roles: ["super_admin", "venue_owner", "venue_staff"] },
+      { href: "/bookings", labelKey: "nav_bookings",  icon: CalendarCheck,   roles: ["super_admin", "venue_owner", "venue_staff"] },
+      { href: "/customers", labelKey: "nav_customers", icon: Contact2,       roles: ["venue_owner", "venue_staff"] },
     ],
   },
   {
     labelKey: "nav_management",
     items: [
+      { href: "/staff",         labelKey: "nav_staff",         icon: UserCog,     roles: ["venue_owner"] },
       { href: "/users",         labelKey: "nav_users",         icon: Users,       roles: ["super_admin"] },
       { href: "/leads",         labelKey: "nav_leads",         icon: Inbox,       roles: ["super_admin"] },
-      { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  roles: ["super_admin"] },
+      // Opened up from super_admin: the ledger answers "what did we take yesterday" and
+      // "who on my staff recorded it", which is the venue's question, not the platform's.
+      { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  roles: ["super_admin", "venue_owner", "venue_staff"] },
       { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,   roles: ["super_admin", "venue_owner"] },
       { href: "/reviews",       labelKey: "reviews",           icon: Star,        roles: ["super_admin"] },
       { href: "/notifications", labelKey: "nav_notifications", icon: Bell,        roles: ["super_admin"] },

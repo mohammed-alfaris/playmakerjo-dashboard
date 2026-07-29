@@ -2,8 +2,22 @@ import api from "./axios"
 
 export interface Booking {
   id: string
-  venue: { id: string; name: string; city?: string; images?: string[] }
+  venue: {
+    id: string
+    name: string
+    city?: string
+    images?: string[]
+    /** The venue's real CliQ alias. Sent by the API as `cliqAlias`. */
+    cliqAlias?: string | null
+  }
   player: { id: string; name: string }
+  /**
+   * The venue-side customer, when one was recorded. Null for app bookings and for walk-ins
+   * taken before customer records existed — and on those legacy rows `player` is the
+   * OWNER'S own name, which is exactly the display bug this field exists to end. Always
+   * prefer customer, fall back to player.
+   */
+  customer?: { id: string; name: string; phone: string } | null
   sport: string
   // Which physical pitch this booking lives on. Legacy rows (no pitchId on the DB)
   // are projected to the venue's implicit first-of-sport pitch on read, so this is
@@ -18,6 +32,10 @@ export interface Booking {
   depositAmount?: number
   depositPaid?: boolean
   amountPaid?: number
+  /** Free-text owner notes. Also the only place a legacy walk-in's name survives. */
+  notes?: string | null
+  /** Taken at the counter or by phone, rather than through the player app. */
+  isManual?: boolean
   systemFee?: number
   ownerAmount?: number
   systemFeePercentage?: number
@@ -27,6 +45,17 @@ export interface Booking {
   paymentProofNote?: string | null
   recurringGroupId?: string | null
   status: "pending" | "pending_payment" | "pending_review" | "confirmed" | "cancelled" | "completed" | "no_show"
+  /** When this unpaid hold is released. Absent on everything that is not one. */
+  paymentDeadlineAt?: string | null
+  /**
+   * Set when the expiry job released the slot rather than a person cancelling it.
+   *
+   * There is no "expired" status — the backend writes "cancelled" because that is the only
+   * literal every conflict scan treats as freeing a slot. So this field is the ONLY thing
+   * separating "the customer changed their mind" from "nobody paid and we took it back",
+   * and anything that prints "cancelled" to an owner has to read it first.
+   */
+  autoCancelledAt?: string | null
 }
 
 export interface BookingsParams {
@@ -59,13 +88,43 @@ export async function cancelSeries(groupId: string) {
   return res.data
 }
 
+/** Cancels a single booking — the plain per-row action, distinct from cancelSeries. */
+export async function cancelBooking(id: string) {
+  const res = await api.patch(`/bookings/${id}/cancel`)
+  return res.data.data as Booking
+}
+
 export async function reviewProof(id: string, payload: { approved: boolean; note?: string }) {
   const res = await api.patch(`/bookings/${id}/review-proof`, payload)
   return res.data.data as Booking
 }
 
+/**
+ * Marks the booking completed AND collects any outstanding balance in the same call — one act
+ * at the counter, because "he played" and "he paid" are the same moment.
+ *
+ * For money WITHOUT completion (an upcoming slot prepaid, or a pending_payment booking settled
+ * at the counter) the API exposes PATCH /bookings/{id}/mark-paid. Nothing in the dashboard calls
+ * it yet — see GAP-ANALYSIS.md.
+ */
 export async function completeBooking(id: string) {
   const res = await api.patch(`/bookings/${id}/complete`)
+  return res.data.data as Booking
+}
+
+/**
+ * Records that the outstanding balance has been collected, without completing the booking.
+ *
+ * The endpoint has existed and been tested since the payment ledger landed; nothing called
+ * it, so a booking taken as "pays on arrival" read as owing forever even after the cash was
+ * in the drawer. Settles the FULL remaining amount — partial payments are deliberately not
+ * offered here.
+ *
+ * Idempotent server-side: a second call returns 200 and writes no second ledger row, so a
+ * double-tap on a slow connection cannot book the takings twice.
+ */
+export async function markBookingPaid(id: string) {
+  const res = await api.patch(`/bookings/${id}/mark-paid`)
   return res.data.data as Booking
 }
 

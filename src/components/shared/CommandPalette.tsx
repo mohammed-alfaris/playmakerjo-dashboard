@@ -34,7 +34,7 @@ const PAGES: PageItem[] = [
   { href: "/venues",        labelKey: "nav_venues",        icon: MapPin },
   { href: "/bookings",      labelKey: "nav_bookings",      icon: CalendarCheck },
   { href: "/users",         labelKey: "nav_users",         icon: Users,       adminOnly: true },
-  { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  adminOnly: true },
+  { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard },
   { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3 },
   { href: "/notifications", labelKey: "nav_notifications", icon: Bell,        adminOnly: true },
 ]

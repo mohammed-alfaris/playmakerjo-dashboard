@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useRole } from "@/hooks/useRole"
 import api from "@/api/axios"
 
 interface UnreadResponse {
@@ -27,8 +28,13 @@ function useUnreadCount() {
 
 export function NotificationsBell({ className }: { className?: string }) {
   const navigate = useNavigate()
+  const { isAdmin } = useRole()
   const { data: count = 0 } = useUnreadCount()
   const hasUnread = count > 0
+
+  // /notifications is the platform's broadcast console and is admin-only. Showing the bell
+  // to an owner gave them a button that silently bounced them back to the dashboard.
+  if (!isAdmin) return null
 
   return (
     <Button

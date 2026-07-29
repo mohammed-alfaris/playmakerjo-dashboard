@@ -13,7 +13,7 @@ const COLORS = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ddd6fe"]
 export function TopVenuesChart() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["top-venues"],
-    queryFn: getTopVenues,
+    queryFn: () => getTopVenues(),
   })
   const { t } = useT()
 

@@ -7,7 +7,6 @@ import {
   Loader2,
   Image as ImageIcon,
   Download,
-  Sparkles,
   AlertTriangle,
 } from "lucide-react"
 import { getBooking, reviewProof } from "@/api/bookings"
@@ -98,12 +97,14 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
       })
     : ""
 
+  // The CliQ transfer happens out of band — the platform never observes the
+  // amount actually sent. `amountPaid` is only written when this dialog approves
+  // the proof, so before that it is always 0. There is no data to compare, and a
+  // synthesised "match" signal would be a lie either way: the reviewer has to
+  // read the amount off the screenshot.
   const expected = booking?.depositAmount ?? booking?.amount ?? 0
-  const received = expected
-  const amountsMatch = expected > 0 && expected === received
 
   const bookingShortId = booking?.id?.slice(0, 8)?.toUpperCase() ?? ""
-  const txnRef = bookingShortId ? `TXN-${bookingShortId}` : ""
 
   return (
     <div
@@ -133,12 +134,18 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
             <div className="relative flex min-h-[480px] flex-col items-center justify-center bg-ink p-6">
               {/* Top bar — filename */}
               <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 pt-4 text-[11px]">
+                {/* Only name a file when one actually exists — this used to print
+                    "CLIQ-PROOF-{id}.jpg" even for bookings with no upload at all. */}
                 <div
                   className="mono flex items-center gap-2 text-[#b7c2bc]"
                   style={{ fontFamily: "var(--font-mono)" }}
                 >
-                  <ImageIcon className="h-3 w-3" />
-                  CLIQ-PROOF-{bookingShortId}.jpg
+                  {hasProofImage && (
+                    <>
+                      <ImageIcon className="h-3 w-3" />
+                      CLIQ-PROOF-{bookingShortId}.jpg
+                    </>
+                  )}
                 </div>
                 <div className="flex items-center gap-1">
                   {hasProofImage && (
@@ -163,7 +170,13 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
                 </div>
               </div>
 
-              {/* Proof image or synthetic CliQ receipt */}
+              {/* The uploaded proof, or an honest empty state.
+                  This used to render a synthetic "CliQ TRANSFER RECEIPT" — a
+                  green tick, an amount, a reference and a bank name — whenever
+                  no image existed. That is a forged document: the owner saw what
+                  looked like a verified transfer for a booking with no proof at
+                  all. Never render anything that resembles evidence we do not
+                  have. */}
               {hasProofImage ? (
                 <img
                   src={booking.paymentProof!}
@@ -174,61 +187,18 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
                   }}
                 />
               ) : (
-                <div
-                  className="mt-8 w-[260px] rounded-lg bg-white p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.6)]"
-                  style={{ color: "#111", transform: "rotate(-1.2deg)" }}
-                >
-                  <div className="text-center text-[10px] font-semibold tracking-[0.1em] text-[#888]">
-                    CliQ TRANSFER RECEIPT
-                  </div>
-                  <div className="my-3.5 text-center">
-                    <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[#dff3e6] text-[#0b6438]">
-                      <Check className="h-6 w-6" strokeWidth={2.5} />
-                    </span>
-                  </div>
-                  <div
-                    className="flex flex-col gap-2 text-[11px] text-[#333]"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                  >
-                    <ReceiptRow
-                      label="AMOUNT"
-                      value={`${received.toFixed(2)} JD`}
-                    />
-                    <ReceiptRow
-                      label="TO"
-                      value={booking.venue.name.toUpperCase().slice(0, 14)}
-                    />
-                    <ReceiptRow
-                      label="FROM"
-                      value={booking.player.name.toUpperCase().slice(0, 14)}
-                    />
-                    <ReceiptRow label="REF" value={txnRef} />
-                    <ReceiptRow
-                      label="DATE"
-                      value={new Date(booking.date).toLocaleDateString("en-GB")}
-                    />
-                  </div>
-                  <div className="my-3.5 h-px bg-[#eee]" />
-                  <div className="text-center text-[9px] text-[#aaa]">
-                    Jordan Ahli Bank · Powered by CliQ
+                <div className="mt-8 flex w-[260px] flex-col items-center gap-3 rounded-lg border border-dashed border-white/20 p-8 text-center">
+                  <ImageIcon className="h-8 w-8 text-white/30" />
+                  <div className="text-[13px] font-medium text-white/70">
+                    {t("no_proof_uploaded")}
                   </div>
                 </div>
               )}
 
-              {/* Thumbnail strip (design motif) */}
-              <div className="mt-5 flex gap-1.5">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "h-11 w-11 rounded-md",
-                      i === 1
-                        ? "border-[1.5px] border-lime bg-white/15"
-                        : "border border-white/10 bg-white/[0.08]"
-                    )}
-                  />
-                ))}
-              </div>
+              {/* A three-thumbnail strip used to render here unconditionally as a
+                  "design motif". A booking carries at most ONE paymentProof, so it
+                  implied two uploads that never existed — decorative fiction on the
+                  screen where someone decides whether money arrived. */}
             </div>
 
             {/* RIGHT — details + decision */}
@@ -241,7 +211,7 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
                 {bookingShortId}
               </h2>
               <p className="mt-0.5 text-[12px] text-ink-3">
-                Submitted {submittedLabel} · {booking.player.name}
+                {t("submitted_on")} {submittedLabel} · {booking.player.name}
               </p>
 
               <div className="hair my-4" />
@@ -251,20 +221,17 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
                   label={t("amount_expected")}
                   value={formatCurrency(expected)}
                   mono
-                  match={amountsMatch}
-                />
-                <Row
-                  label={t("amount_received")}
-                  value={formatCurrency(received)}
-                  mono
-                  match={amountsMatch}
                 />
                 <Row
                   label={t("cliq_alias")}
-                  value={`PLAYMAKER.${booking.venue.id.slice(0, 6).toUpperCase()}`}
+                  value={booking.venue.cliqAlias || "—"}
                   mono
                 />
-                <Row label={t("transfer_reference")} value={txnRef} mono />
+                <Row
+                  label={t("booking_reference")}
+                  value={bookingShortId || "—"}
+                  mono
+                />
                 <Row label={t("venue")} value={booking.venue.name} />
                 <Row
                   label={t("date_of_match")}
@@ -276,15 +243,15 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
                 />
               </div>
 
-              {/* Smart callout */}
-              {amountsMatch && isPending && (
+              {/* The platform cannot verify the transfer — the reviewer must. */}
+              {isPending && (
                 <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-line bg-surface-2/50 p-3 text-[12px] text-ink">
-                  <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-none text-brand" />
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-none text-amber-ink" />
                   <div>
                     <div className="mb-0.5 font-semibold">
-                      {t("all_signals_match")}
+                      {t("verify_before_approving")}
                     </div>
-                    <div className="text-ink-3">{t("safe_to_approve")}</div>
+                    <div className="text-ink-3">{t("verify_amount_hint")}</div>
                   </div>
                 </div>
               )}
@@ -389,25 +356,14 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
 
 // ---- sub-components ---------------------------------------------------------
 
-function ReceiptRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-[#888]">{label}</span>
-      <span className="font-bold">{value}</span>
-    </div>
-  )
-}
-
 function Row({
   label,
   value,
   mono,
-  match,
 }: {
   label: string
   value: string
   mono?: boolean
-  match?: boolean
 }) {
   return (
     <div>
@@ -420,12 +376,6 @@ function Row({
         >
           {value}
         </span>
-        {match && (
-          <span className="chip chip-brand text-[9px] font-semibold">
-            <Check className="h-2.5 w-2.5" strokeWidth={3} />
-            MATCH
-          </span>
-        )}
       </div>
     </div>
   )
