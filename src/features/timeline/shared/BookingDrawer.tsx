@@ -132,14 +132,21 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
               </Button>
             )}
 
-            {/* Anything that is owed and not cancelled.
-                "completed" is in this list on purpose: the bulk "everyone came" prompt
-                completes bookings without touching money, and Complete refuses a
-                non-confirmed booking — so without this a bulk-confirmed session could never
-                be settled through any screen and the customer read as owing forever.
+            {/* Anything that is owed, not cancelled, and NOT already offering "attended".
+                "confirmed" is deliberately absent: that is the one state where the button
+                above is shown, and there it already collects the full balance as it
+                completes — two buttons doing the same job in the common case.
+
+                The rest of the list is load-bearing, not leftovers. Complete refuses any
+                booking that is not confirmed, so for these states it is the ONLY way money
+                can be recorded:
+                  - pending / pending_payment / pending_review — paying before confirmation
+                  - completed — the bulk "everyone came" prompt completes without touching
+                    money, so a bulk-confirmed session would otherwise read as owing forever
+                    with no screen able to settle it.
                 No-show is excluded: he did not come, so there is nothing to collect for. */}
             {remaining > 0.001 &&
-              ["pending", "pending_payment", "pending_review", "confirmed", "completed"].includes(booking.status) && (
+              ["pending", "pending_payment", "pending_review", "completed"].includes(booking.status) && (
               <Button
                 size="sm"
                 variant="outline"
