@@ -46,7 +46,11 @@ export default function BookingsPage() {
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
   const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
-  const { isAdmin, isOwner } = useRole()
+  // canWrite, not isAdmin || isOwner: a clerk with "write" may already do all of this from
+  // the Timeline and the API accepts it (VenueAccess.CanWrite). Gating here on ownership
+  // made the same clerk read-only on this page — the app silently disagreed with itself
+  // about what "write" means depending on which screen you were standing on.
+  const { canWrite } = useRole()
 
   const cancelSeriesMutation = useMutation({
     mutationFn: (groupId: string) => cancelSeries(groupId),
@@ -336,7 +340,7 @@ export default function BookingsPage() {
                 {t("cancel_series")}
               </Button>
             )}
-            {b.status === "confirmed" && (isAdmin || isOwner) && (
+            {b.status === "confirmed" && canWrite && (
               <>
                 <Button
                   size="sm"
@@ -362,7 +366,7 @@ export default function BookingsPage() {
                 </Button>
               </>
             )}
-            {CANCELLABLE_STATUSES.includes(b.status) && (isAdmin || isOwner) && (
+            {CANCELLABLE_STATUSES.includes(b.status) && canWrite && (
               <Button
                 size="sm"
                 variant="outline"

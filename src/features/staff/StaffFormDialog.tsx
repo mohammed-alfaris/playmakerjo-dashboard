@@ -53,7 +53,11 @@ export default function StaffFormDialog({
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { permissions: "write" },
+    // "read", matching the API's own default when the field is absent
+    // (UsersController.cs: req.Permissions ?? "read"). The two used to disagree, and the
+    // failure modes are not symmetric: a clerk who cannot click something says so within
+    // the hour, while a clerk silently granted write says nothing at all.
+    defaultValues: { permissions: "read" },
   })
 
   const permissions = watch("permissions")
@@ -63,7 +67,7 @@ export default function StaffFormDialog({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["staff"] })
       toast.success(t("staff_created"))
-      reset({ permissions: "write" })
+      reset({ permissions: "read" })
       onOpenChange(false)
     },
     onError: (err: unknown) => {
