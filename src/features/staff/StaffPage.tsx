@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { UserCog, ShieldBan, ShieldCheck } from "lucide-react"
+import { UserCog, ShieldBan, ShieldCheck, KeyRound } from "lucide-react"
 import type { ColumnDef } from "@tanstack/react-table"
 import {
   getStaff,
@@ -12,6 +12,7 @@ import {
 } from "@/api/staff"
 import { DataTable } from "@/components/shared/DataTable"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { ResetPasswordFlow } from "@/components/shared/ResetPasswordFlow"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,6 +32,7 @@ export default function StaffPage() {
   const qc = useQueryClient()
   const { page, limit, setPage } = usePagination()
   const [addOpen, setAddOpen] = useState(false)
+  const [resetTarget, setResetTarget] = useState<StaffMember | null>(null)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["staff", page, limit],
@@ -117,8 +119,16 @@ export default function StaffPage() {
     {
       id: "actions",
       header: t("actions"),
-      cell: ({ row }) =>
-        row.original.status === "active" ? (
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          {/* A locked-out clerk is the most common reason an owner has to contact the vendor.
+              Offered whatever their status: resetting a suspended clerk's password is a
+              normal step before bringing them back. */}
+          <Button variant="ghost" size="sm" onClick={() => setResetTarget(row.original)}>
+            <KeyRound className="me-1.5 h-3.5 w-3.5" />
+            {t("reset_password")}
+          </Button>
+          {row.original.status === "active" ? (
           <Button
             variant="ghost"
             size="sm"
@@ -137,7 +147,9 @@ export default function StaffPage() {
             <ShieldCheck className="me-1.5 h-3.5 w-3.5" />
             {t("activate")}
           </Button>
-        ),
+          )}
+        </div>
+      ),
     },
   ]
 
@@ -167,6 +179,11 @@ export default function StaffPage() {
       )}
 
       <StaffFormDialog open={addOpen} onOpenChange={setAddOpen} />
+
+      <ResetPasswordFlow
+        target={resetTarget}
+        onOpenChange={(open) => { if (!open) setResetTarget(null) }}
+      />
     </div>
   )
 }

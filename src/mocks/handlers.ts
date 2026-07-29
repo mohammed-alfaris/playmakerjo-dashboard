@@ -221,6 +221,21 @@ const userHandlers = [
     return HttpResponse.json({ success: true, data, message: "OK", pagination })
   }),
 
+  http.post(`${BASE}/users/:id/reset-password`, async ({ params }) => {
+    await delay(400)
+    const user = users.find(u => u.id === params.id)
+    if (!user) return HttpResponse.json({ success: false, message: "User not found" }, { status: 404 })
+    // Shaped like the server's generator: no O/0, I/l/1, S/5 or B/8, because this value's
+    // whole life is being read down a phone. Not cryptographic — this is the mock.
+    const alphabet = "ABCDEFGHJKMNPQRTUVWXYZabcdefghijkmnpqrtuvwxyz234679"
+    const temporaryPassword = Array.from(
+      { length: 14 },
+      () => alphabet[Math.floor(Math.random() * alphabet.length)],
+    ).join("")
+    return ok({ userId: user.id, email: user.email, temporaryPassword },
+      "Password reset. Give this password to the user — it is shown only once.")
+  }),
+
   http.patch(`${BASE}/users/:id/status`, async ({ params, request }) => {
     await delay(400)
     const body = await request.json() as { status: string }
