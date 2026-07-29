@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone, Wallet } from "lucide-react"
+import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 import { ProofReviewDialog } from "./ProofReviewDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { getBookings, cancelSeries, cancelBooking, completeBooking, markNoShow, markBookingPaid, type Booking } from "@/api/bookings"
+import { getBookings, cancelSeries, cancelBooking, completeBooking, markNoShow, type Booking } from "@/api/bookings"
 import { getVenues, type Venue } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
 import { useOwnerFilter, useRole } from "@/hooks/useRole"
@@ -45,7 +45,6 @@ export default function BookingsPage() {
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
   const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
-  const [payBookingId, setPayBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   // canWrite, not isAdmin || isOwner: a clerk with "write" may already do all of this from
   // the Timeline and the API accepts it (VenueAccess.CanWrite). Gating here on ownership
@@ -87,26 +86,6 @@ export default function BookingsPage() {
       toast.error(e.response?.data?.message ?? t("manual_booking_failed")),
   })
 
-  // Collecting WITHOUT completing. Completing settles the balance too, but only once the
-  // game has happened — a customer who pays when they walk in for a slot later today, or who
-  // settles a phone booking days ahead, had nowhere to be recorded from this screen. The
-  // booking sat reading "owes money" with the cash already in the drawer. The Timeline drawer
-  // has had this since the ledger landed; this page did not, so the same booking offered
-  // different actions depending on where you opened it.
-  const markPaidMutation = useMutation({
-    mutationFn: (id: string) => markBookingPaid(id),
-    onSuccess: () => {
-      toast.success(t("payment_recorded"))
-      queryClient.invalidateQueries({ queryKey: ["bookings"] })
-      queryClient.invalidateQueries({ queryKey: ["timeline-bookings"] })
-      queryClient.invalidateQueries({ queryKey: ["payments"] })
-      queryClient.invalidateQueries({ queryKey: ["customers"] })
-      setPayBookingId(null)
-    },
-    onError: (e: { response?: { data?: { message?: string } } }) =>
-      toast.error(e.response?.data?.message ?? t("something_went_wrong")),
-  })
-
   const noShowMutation = useMutation({
     mutationFn: (id: string) => markNoShow(id),
     onSuccess: () => {
@@ -146,10 +125,6 @@ export default function BookingsPage() {
 
   // What completing this booking will collect, shown in the confirm dialog so the amount is
   // never a surprise after the fact.
-  const payTarget = bookings.find((b) => b.id === payBookingId)
-  const payRemaining = payTarget
-    ? Math.max(0, (payTarget.totalAmount ?? payTarget.amount) - (payTarget.amountPaid ?? 0))
-    : 0
   const completeTarget = bookings.find((b) => b.id === completeBookingId)
   const completeRemaining = completeTarget
     ? Math.max(0, (completeTarget.totalAmount ?? completeTarget.amount) - (completeTarget.amountPaid ?? 0))
@@ -391,24 +366,6 @@ export default function BookingsPage() {
                 </Button>
               </>
             )}
-            {/* Collect without completing. Deliberately wider than the complete button's
-                status list and includes "completed": completing a booking that was already
-                settled elsewhere leaves nothing to collect, but a bulk-confirmed session can
-                reach "completed" still owing money, and before this the balance could only
-                be cleared from the Timeline drawer. No-show is excluded — he did not come,
-                so there is nothing to collect for. */}
-            {remaining > 0.001 && canWrite &&
-              ["pending", "pending_payment", "pending_review", "confirmed", "completed"].includes(b.status) && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                onClick={() => setPayBookingId(b.id)}
-              >
-                <Wallet className="h-3 w-3 me-1" />
-                {`${t("record_payment")} (${formatCurrency(remaining)})`}
-              </Button>
-            )}
             {CANCELLABLE_STATUSES.includes(b.status) && canWrite && (
               <Button
                 size="sm"
@@ -571,15 +528,6 @@ export default function BookingsPage() {
         onOpenChange={(open) => { if (!open) setCompleteBookingId(null) }}
         onConfirm={() => completeBookingId && completeMutation.mutate(completeBookingId)}
         isLoading={completeMutation.isPending}
-      />
-
-      <ConfirmDialog
-        title={t("record_payment")}
-        description={t("record_payment_confirm").replace("{amount}", formatCurrency(payRemaining))}
-        open={!!payBookingId}
-        onOpenChange={(open) => { if (!open) setPayBookingId(null) }}
-        onConfirm={() => payBookingId && markPaidMutation.mutate(payBookingId)}
-        isLoading={markPaidMutation.isPending}
       />
 
       <ConfirmDialog
