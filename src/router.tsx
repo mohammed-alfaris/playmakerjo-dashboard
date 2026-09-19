@@ -18,6 +18,7 @@ const ReviewsPage = lazy(() => import("@/features/reviews/ReviewsPage"))
 const TimelinePage = lazy(() => import("@/features/timeline/TimelinePage"))
 const MapPage = lazy(() => import("@/features/map/MapPage"))
 const SettingsPage = lazy(() => import("@/features/settings/SettingsPage"))
+const VenueFeaturesPage = lazy(() => import("@/features/venue-features/VenueFeaturesPage"))
 const LeadsPage = lazy(() => import("@/features/leads/LeadsPage"))
 const StaffPage = lazy(() => import("@/features/staff/StaffPage"))
 const CustomersPage = lazy(() => import("@/features/customers/CustomersPage"))
@@ -112,6 +113,7 @@ export const router = createBrowserRouter([
       { path: "reviews",    element: <AdminRoute><LazyPage><ReviewsPage /></LazyPage></AdminRoute> },
       { path: "leads",      element: <AdminRoute><LazyPage><LeadsPage /></LazyPage></AdminRoute> },
       { path: "settings",   element: <AdminRoute><LazyPage><SettingsPage /></LazyPage></AdminRoute> },
+      { path: "venue-features", element: <AdminRoute><LazyPage><VenueFeaturesPage /></LazyPage></AdminRoute> },
       { path: "profile",    element: <LazyPage><ProfilePage /></LazyPage> },
       { path: "*",          element: <Navigate to="/" replace /> },
     ],

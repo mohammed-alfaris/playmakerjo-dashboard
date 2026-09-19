@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
+import { featureIcon } from "@/lib/featureIcons"
 import type { Venue } from "@/api/venues"
 
 // ---------------------------------------------------------------------------
@@ -8,7 +9,9 @@ import type { Venue } from "@/api/venues"
 // ---------------------------------------------------------------------------
 
 export function OverviewTab({ venue }: { venue: Venue }) {
-  const { t } = useT()
+  const { t, lang } = useT()
+  const features = venue.features ?? []
+  const custom = venue.customFeatures ?? []
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <Section title={t("profile_about")}>
@@ -46,6 +49,35 @@ export function OverviewTab({ venue }: { venue: Venue }) {
           )}
         </div>
       </Section>
+      <Section title={t("venue_features")} className="md:col-span-3">
+        {features.length === 0 && custom.length === 0 ? (
+          <p className="text-[12.5px] italic text-[hsl(var(--ink-3))]">{t("features_none")}</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {features.map((f) => {
+              const Icon = featureIcon(f.icon)
+              return (
+                <span
+                  key={f.id}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--brand-tint))] px-3 py-1 text-[12px] font-medium text-[hsl(var(--brand-ink))]"
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {lang === "ar" ? f.nameAr || f.name : f.name}
+                </span>
+              )
+            })}
+            {/* Owner-typed: shown as typed, deliberately without an icon. */}
+            {custom.map((c) => (
+              <span
+                key={c}
+                className="inline-flex items-center rounded-full bg-[hsl(var(--surface-2))] px-3 py-1 text-[12px] text-[hsl(var(--ink-2))]"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
+      </Section>
     </div>
   )
 }
@@ -54,9 +86,9 @@ export function OverviewTab({ venue }: { venue: Venue }) {
 // Shared helpers (Section + KV) — kept here as they are only used by Overview
 // ---------------------------------------------------------------------------
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, className, children }: { title: string; className?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[14px] bg-card border border-[hsl(var(--line))] shadow-sm-stadium p-4 space-y-3">
+    <div className={`rounded-[14px] bg-card border border-[hsl(var(--line))] shadow-sm-stadium p-4 space-y-3 ${className ?? ""}`}>
       <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[hsl(var(--ink-3))]">
         {title}
       </div>

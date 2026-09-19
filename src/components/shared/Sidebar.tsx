@@ -14,6 +14,7 @@ import {
   Star,
   Inbox,
   Settings as SettingsIcon,
+  Sparkles,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -59,6 +60,7 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
       { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  roles: ["super_admin", "venue_owner", "venue_staff"] },
       { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,   roles: ["super_admin", "venue_owner"] },
       { href: "/reviews",       labelKey: "reviews",           icon: Star,        roles: ["super_admin"] },
+      { href: "/venue-features", labelKey: "nav_venue_features", icon: Sparkles, roles: ["super_admin"] },
       { href: "/notifications", labelKey: "nav_notifications", icon: Bell,        roles: ["super_admin"] },
       { href: "/settings",      labelKey: "nav_settings",      icon: SettingsIcon, roles: ["super_admin"] },
     ],

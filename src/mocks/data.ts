@@ -424,3 +424,20 @@ export const mockSportsBreakdown = [
   { sport: "Padel",      count: 3 },
   { sport: "Volleyball", count: 2 },
 ]
+
+// Mirrors the API migration's starter catalog (AddVenueFeatures), so mock mode shows the same
+// features a fresh production database does. venueCount is what the admin list returns.
+export const mockVenueFeatures = [
+  { id: "vf-parking",        name: "Parking",           nameAr: "موقف سيارات",       icon: "parking",       sortOrder: 10,  isActive: true },
+  { id: "vf-showers",        name: "Showers",           nameAr: "دشّات",              icon: "shower",        sortOrder: 20,  isActive: true },
+  { id: "vf-changing-rooms", name: "Changing rooms",    nameAr: "غرف تبديل الملابس",  icon: "changing_room", sortOrder: 30,  isActive: true },
+  { id: "vf-lockers",        name: "Lockers",           nameAr: "خزائن",              icon: "locker",        sortOrder: 40,  isActive: true },
+  { id: "vf-floodlights",    name: "Floodlights",       nameAr: "إضاءة الملعب",       icon: "floodlights",   sortOrder: 50,  isActive: true },
+  { id: "vf-wifi",           name: "Wi-Fi",             nameAr: "واي فاي",            icon: "wifi",          sortOrder: 60,  isActive: true },
+  { id: "vf-cafe",           name: "Café",              nameAr: "كافيه",              icon: "cafe",          sortOrder: 70,  isActive: true },
+  { id: "vf-drinking-water", name: "Drinking water",    nameAr: "مياه شرب",           icon: "water",         sortOrder: 80,  isActive: true },
+  { id: "vf-seating",        name: "Spectator seating", nameAr: "مقاعد للجمهور",      icon: "seating",       sortOrder: 90,  isActive: true },
+  { id: "vf-prayer-room",    name: "Prayer room",       nameAr: "مصلى",               icon: "prayer_room",   sortOrder: 100, isActive: true },
+  { id: "vf-first-aid",      name: "First aid",         nameAr: "إسعافات أولية",      icon: "first_aid",     sortOrder: 110, isActive: true },
+  { id: "vf-restrooms",      name: "Restrooms",         nameAr: "دورات مياه",         icon: "restroom",      sortOrder: 120, isActive: true },
+]

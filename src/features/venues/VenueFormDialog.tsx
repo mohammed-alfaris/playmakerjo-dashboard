@@ -29,6 +29,7 @@ import {
 } from "./form/venueFormSchema"
 import { WizardStepper } from "./form/WizardStepper"
 import { MediaStep } from "./form/MediaStep"
+import { FeaturesStep } from "./form/FeaturesStep"
 import { PitchCard } from "./form/PitchCard"
 import { HoursRows } from "./form/HoursRows"
 
@@ -46,6 +47,8 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
   const { t } = useT()
 
   const [images, setImages] = useState<string[]>([])
+  const [featureIds, setFeatureIds] = useState<string[]>([])
+  const [customFeatures, setCustomFeatures] = useState<string[]>([])
   const [expandedPitchId, setExpandedPitchId] = useState<string | null>(null)
   const [step, setStep] = useState(0)
 
@@ -82,6 +85,8 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
     if (!open) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setImages(venue?.images ?? [])
+    setFeatureIds(venue?.features?.map((f) => f.id) ?? [])
+    setCustomFeatures(venue?.customFeatures ?? [])
 
     // Seed pitches: the backend always returns `pitches` (legacy venues get a
     // synthesised array), so we can just reuse it. For a new venue, start with
@@ -222,6 +227,8 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
         sizePrices: legacySplit.sizePrices,
         sportsConfig,
         pitches:    pitchesPayload,
+        featureIds,
+        customFeatures,
       }
       // owner_id is admin-only on edit (the API 403s owner changes from
       // non-admins); owners always create venues as themselves.
@@ -499,8 +506,19 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
               </div>
             )}
 
-            {/* Step 5 — Media & Location: Images + lat/lng */}
+            {/* Step 5 — Features: catalog picks + the owner's own */}
             {step === 4 && (
+              <FeaturesStep
+                featureIds={featureIds}
+                setFeatureIds={setFeatureIds}
+                customFeatures={customFeatures}
+                setCustomFeatures={setCustomFeatures}
+                attached={venue?.features ?? []}
+              />
+            )}
+
+            {/* Step 6 — Media & Location: Images + lat/lng */}
+            {step === 5 && (
               <MediaStep images={images} setImages={setImages} register={register} />
             )}
           </div>

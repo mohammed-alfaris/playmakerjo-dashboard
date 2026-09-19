@@ -9,6 +9,7 @@ import {
   mockTopVenues,
   mockSportsBreakdown,
   mockCustomers,
+  mockVenueFeatures,
 } from "./data"
 
 const BASE = import.meta.env.VITE_API_URL as string
@@ -16,6 +17,7 @@ const BASE = import.meta.env.VITE_API_URL as string
 // Mutable copies so POST/PATCH/DELETE mutations persist during the session
 let users = [...mockUsers]
 let venues = [...mockVenues]
+let venueFeatures = [...mockVenueFeatures]
 const bookings = [...mockBookings]
 const payments = [...mockPayments]
 
@@ -164,7 +166,7 @@ const venueHandlers = [
 
   http.post(`${BASE}/venues`, async ({ request }) => {
     await delay(500)
-    const body = await request.json() as Record<string, unknown>
+    const body = withResolvedFeatures(await request.json() as Record<string, unknown>)
     const newVenue = { id: `v${Date.now()}`, status: "active", createdAt: new Date().toISOString(), ...body }
     venues = [newVenue as typeof venues[0], ...venues]
     return ok(newVenue, "Venue created")
@@ -187,7 +189,7 @@ const venueHandlers = [
 
   http.patch(`${BASE}/venues/:id`, async ({ params, request }) => {
     await delay(400)
-    const body = await request.json() as Record<string, unknown>
+    const body = withResolvedFeatures(await request.json() as Record<string, unknown>)
     venues = venues.map(v => v.id === params.id ? { ...v, ...body } : v)
     const updated = venues.find(v => v.id === params.id)
     return ok(updated, "Venue updated")
@@ -310,6 +312,68 @@ function normalizeJo(raw: string): string | null {
   const c = `+962${n}`
   return /^\+9627[789]\d{7}$/.test(c) ? c : null
 }
+
+// ─── Venue features catalog ──────────────────────────────────────────────────
+function withResolvedFeatures(body: Record<string, unknown>) {
+  if (!Array.isArray(body.featureIds)) return body
+  const { featureIds, ...rest } = body as { featureIds: string[] } & Record<string, unknown>
+  const features = venueFeatures
+    .filter(f => featureIds.includes(f.id))
+    .map(({ id, name, nameAr, icon }) => ({ id, name, nameAr, icon }))
+  return { ...rest, features }
+}
+
+function venueCountFor(id: string) {
+  return venues.filter(v => ((v as { features?: { id: string }[] }).features ?? []).some(f => f.id === id)).length
+}
+
+const venueFeatureHandlers = [
+  http.get(`${BASE}/venue-features`, async ({ request }) => {
+    await delay(250)
+    const includeInactive = new URL(request.url).searchParams.get("includeInactive") === "true"
+    const list = venueFeatures
+      .filter(f => includeInactive || f.isActive)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map(f => ({ ...f, venueCount: venueCountFor(f.id) }))
+    return ok(list)
+  }),
+
+  http.post(`${BASE}/venue-features`, async ({ request }) => {
+    await delay(400)
+    const body = await request.json() as { name?: string; nameAr?: string; icon?: string; sortOrder?: number }
+    const name = (body.name ?? "").trim()
+    const nameAr = (body.nameAr ?? "").trim()
+    if (!name || !nameAr) return err("Both the English and the Arabic name are required.", 400)
+    if (venueFeatures.some(f => f.name.toLowerCase() === name.toLowerCase() || f.nameAr === nameAr))
+      return err("A feature with that name already exists.", 409)
+    const slug = "vf-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+    const feature = {
+      id: slug, name, nameAr, icon: body.icon ?? "equipment",
+      sortOrder: body.sortOrder ?? Math.max(0, ...venueFeatures.map(f => f.sortOrder)) + 10,
+      isActive: true,
+    }
+    venueFeatures = [...venueFeatures, feature]
+    return ok({ ...feature, venueCount: 0 }, "Feature created")
+  }),
+
+  http.patch(`${BASE}/venue-features/:id`, async ({ params, request }) => {
+    await delay(300)
+    const body = await request.json() as Record<string, unknown>
+    if (!venueFeatures.some(f => f.id === params.id)) return err("Feature not found", 404)
+    venueFeatures = venueFeatures.map(f => f.id === params.id ? { ...f, ...body } : f)
+    const updated = venueFeatures.find(f => f.id === params.id)!
+    return ok({ ...updated, venueCount: venueCountFor(updated.id) }, "Feature updated")
+  }),
+
+  // Same rule as the API: a feature in use is deactivated, never deleted out from under venues.
+  http.delete(`${BASE}/venue-features/:id`, async ({ params }) => {
+    await delay(300)
+    const inUse = venueCountFor(String(params.id))
+    if (inUse > 0) return err(`Used by ${inUse} venue(s). Deactivate it instead, so those venues keep it.`, 409)
+    venueFeatures = venueFeatures.filter(f => f.id !== params.id)
+    return ok(null, "Feature deleted")
+  }),
+]
 
 const customerHandlers = [
   // Registered BEFORE /customers/:id so "lookup" is not read as an id.
@@ -686,6 +750,7 @@ export const handlers = [
   ...authHandlers,
   ...reportHandlers,
   ...venueHandlers,
+  ...venueFeatureHandlers,
   ...userHandlers,
   ...staffHandlers,
   ...customerHandlers,

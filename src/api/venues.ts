@@ -1,5 +1,6 @@
 import api from "./axios"
 import type { OperatingHours } from "@/lib/types"
+import type { VenueFeatureRef } from "./venueFeatures"
 
 // Per-sport override config. Empty map = venue runs on the legacy single-sport
 // path (everything read off the venue-level fields). When present, a sport's
@@ -61,6 +62,10 @@ export interface Venue {
   // Legacy venues arrive with an array synthesised server-side from the venue-level
   // fields above — save always writes this array back.
   pitches?: Pitch[]
+  /** Catalog features, resolved to name and icon by the API, in catalog order. */
+  features?: VenueFeatureRef[]
+  /** Features the owner typed. Shown as typed, without an icon, and not filterable. */
+  customFeatures?: string[]
   createdAt: string
 }
 
@@ -96,7 +101,11 @@ export async function getVenueStats(id: string) {
 
 // Write payload: the API takes a snake_case `owner_id` for owner assignment
 // (admin-only on PATCH) and never accepts the nested `owner` object.
-export type VenuePayload = Partial<Omit<Venue, "owner">> & { owner_id?: string }
+// Features are read as resolved objects but written as ids: `featureIds` replaces `features`.
+export type VenuePayload = Partial<Omit<Venue, "owner" | "features">> & {
+  owner_id?: string
+  featureIds?: string[]
+}
 
 export async function createVenue(data: VenuePayload) {
   const res = await api.post("/venues", data)
