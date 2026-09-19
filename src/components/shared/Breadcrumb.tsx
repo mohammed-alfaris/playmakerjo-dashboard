@@ -13,6 +13,7 @@ const ROUTE_LABELS: Record<string, TranslationKey> = {
   "/reports":       "nav_reports",
   "/reviews":       "reviews",
   "/notifications": "nav_notifications",
+  "/venue-features": "nav_venue_features",
   "/profile":       "nav_profile",
 }
 

@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX } from "lucide-react"
+import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 import { ProofReviewDialog } from "./ProofReviewDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -12,18 +12,23 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { getBookings, cancelSeries, completeBooking, markNoShow, type Booking } from "@/api/bookings"
+import { getBookings, cancelSeries, cancelBooking, completeBooking, markNoShow, type Booking } from "@/api/bookings"
 import { getVenues, type Venue } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
 import { useOwnerFilter, useRole } from "@/hooks/useRole"
 import { BOOKING_STATUSES } from "@/lib/constants"
 import { formatCurrency, formatDateTime } from "@/lib/formatters"
+import { bookingPersonName, bookingPersonPhone } from "@/lib/bookingParty"
 import { useT } from "@/i18n/LanguageContext"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
 
 const DATE_INPUT_CLASS =
   "flex h-9 w-36 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm " +
   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground"
+
+// Mirrors the backend's allowed transitions in BookingsController.Cancel — everything except
+// cancelled/completed/no_show, which are terminal states the API itself refuses to touch.
+const CANCELLABLE_STATUSES = ["pending", "pending_payment", "pending_review", "confirmed"]
 
 export default function BookingsPage() {
   const { page, limit, setPage, resetPage } = usePagination()
@@ -37,10 +42,15 @@ export default function BookingsPage() {
   const [pitch_id, setPitchId]  = useState("all")
   const [reviewBookingId, setReviewBookingId] = useState<string | null>(null)
   const [cancelGroupId, setCancelGroupId] = useState<string | null>(null)
+  const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
   const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
-  const { isAdmin, isOwner } = useRole()
+  // canWrite, not isAdmin || isOwner: a clerk with "write" may already do all of this from
+  // the Timeline and the API accepts it (VenueAccess.CanWrite). Gating here on ownership
+  // made the same clerk read-only on this page — the app silently disagreed with itself
+  // about what "write" means depending on which screen you were standing on.
+  const { canWrite } = useRole()
 
   const cancelSeriesMutation = useMutation({
     mutationFn: (groupId: string) => cancelSeries(groupId),
@@ -59,7 +69,21 @@ export default function BookingsPage() {
       queryClient.invalidateQueries({ queryKey: ["bookings"] })
       setCompleteBookingId(null)
     },
-    onError: () => toast.error(t("booking_complete_failed")),
+    // Surface the server's own message — this is how "still owes 20 JOD" reaches the
+    // owner instead of a generic failure that doesn't say why.
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? t("booking_complete_failed")),
+  })
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => cancelBooking(id),
+    onSuccess: () => {
+      toast.success(t("booking_cancelled_toast"))
+      queryClient.invalidateQueries({ queryKey: ["bookings"] })
+      setCancelBookingId(null)
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? t("manual_booking_failed")),
   })
 
   const noShowMutation = useMutation({
@@ -98,6 +122,13 @@ export default function BookingsPage() {
   const bookings: Booking[] = data?.data ?? []
   const pagination          = data?.pagination ?? { page, limit, total: 0 }
   const venueOptions: Venue[] = venuesData?.data ?? []
+
+  // What completing this booking will collect, shown in the confirm dialog so the amount is
+  // never a surprise after the fact.
+  const completeTarget = bookings.find((b) => b.id === completeBookingId)
+  const completeRemaining = completeTarget
+    ? Math.max(0, (completeTarget.totalAmount ?? completeTarget.amount) - (completeTarget.amountPaid ?? 0))
+    : 0
 
   // Pitch filter/column only appear when the user has narrowed to a single
   // venue AND that venue has >1 pitch. Keeps the default view identical to
@@ -159,8 +190,43 @@ export default function BookingsPage() {
       : []),
     {
       accessorKey: "player",
-      header: t("player"),
-      cell: ({ row }) => row.original.player.name,
+      header: t("customer_name"),
+      cell: ({ row }) => {
+        const b = row.original
+        // On a manual booking `player` is the OWNER — the name of whoever typed it in.
+        // bookingPersonName prefers the customer record, then the legacy "Walk-in: …"
+        // fragment, and only then falls back to the player.
+        const name = bookingPersonName(b, t("walk_in_customer"))
+        const phone = bookingPersonPhone(b)
+        return (
+          <div className="min-w-0">
+            <div className="truncate text-sm">{name}</div>
+            {phone && (
+              <div className="truncate text-xs text-muted-foreground" dir="ltr">
+                {phone}
+              </div>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      id: "channel",
+      header: t("booking_channel"),
+      // Where the booking came from. Until this existed the two were indistinguishable
+      // once created — the flag was consumed at creation and thrown away.
+      cell: ({ row }) =>
+        row.original.isManual ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-2">
+            <Store className="h-3 w-3" />
+            {t("channel_counter")}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-medium text-brand-ink">
+            <Smartphone className="h-3 w-3" />
+            {t("channel_app")}
+          </span>
+        ),
     },
     {
       accessorKey: "sport",
@@ -210,7 +276,24 @@ export default function BookingsPage() {
     {
       accessorKey: "status",
       header: t("status"),
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      cell: ({ row }) => {
+        const b = row.original
+        // The backend cannot invent an "expired" status — "cancelled" is the only literal
+        // that frees a slot — so an auto-released hold arrives here indistinguishable from a
+        // customer who changed their mind. Saying "Cancelled" would be a small lie told to
+        // an owner about his own customer, so the badge reads the timestamp instead.
+        if (b.status === "cancelled" && b.autoCancelledAt) {
+          return (
+            <span
+              className="inline-flex items-center rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[11px] text-ink-2"
+              title={t("status_expired_hint")}
+            >
+              {t("status_expired")}
+            </span>
+          )
+        }
+        return <StatusBadge status={b.status} />
+      },
     },
     {
       id: "payment",
@@ -233,6 +316,7 @@ export default function BookingsPage() {
       header: "",
       cell: ({ row }) => {
         const b = row.original
+        const remaining = Math.max(0, (b.totalAmount ?? b.amount) - (b.amountPaid ?? 0))
         return (
           <div className="flex items-center gap-2">
             {b.paymentMethod === "cliq" && b.paymentProofStatus && (
@@ -256,7 +340,7 @@ export default function BookingsPage() {
                 {t("cancel_series")}
               </Button>
             )}
-            {b.status === "confirmed" && (isAdmin || isOwner) && (
+            {b.status === "confirmed" && canWrite && (
               <>
                 <Button
                   size="sm"
@@ -265,7 +349,11 @@ export default function BookingsPage() {
                   onClick={() => setCompleteBookingId(b.id)}
                 >
                   <CheckCircle className="h-3 w-3 me-1" />
-                  {t("mark_completed")}
+                  {/* One tap = he played and he paid. The amount is on the button so the
+                      owner knows what he is collecting before he taps it. */}
+                  {remaining > 0.001
+                    ? `${t("mark_completed")} (${formatCurrency(remaining)})`
+                    : t("mark_completed")}
                 </Button>
                 <Button
                   size="sm"
@@ -277,6 +365,17 @@ export default function BookingsPage() {
                   {t("mark_no_show")}
                 </Button>
               </>
+            )}
+            {CANCELLABLE_STATUSES.includes(b.status) && canWrite && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={() => setCancelBookingId(b.id)}
+              >
+                <X className="h-3 w-3 me-1" />
+                {t("cancel")}
+              </Button>
             )}
           </div>
         )
@@ -420,7 +519,11 @@ export default function BookingsPage() {
 
       <ConfirmDialog
         title={t("mark_completed")}
-        description={t("mark_completed_confirm")}
+        description={
+          completeRemaining > 0.001
+            ? t("mark_completed_and_collect_confirm").replace("{amount}", formatCurrency(completeRemaining))
+            : t("mark_completed_confirm")
+        }
         open={!!completeBookingId}
         onOpenChange={(open) => { if (!open) setCompleteBookingId(null) }}
         onConfirm={() => completeBookingId && completeMutation.mutate(completeBookingId)}
@@ -435,6 +538,17 @@ export default function BookingsPage() {
         onConfirm={() => noShowBookingId && noShowMutation.mutate(noShowBookingId)}
         isLoading={noShowMutation.isPending}
       />
+
+      <ConfirmDialog
+        title={t("cancel")}
+        description={t("cancel_booking_confirm")}
+        variant="destructive"
+        open={!!cancelBookingId}
+        onOpenChange={(open) => { if (!open) setCancelBookingId(null) }}
+        onConfirm={() => cancelBookingId && cancelMutation.mutate(cancelBookingId)}
+        isLoading={cancelMutation.isPending}
+      />
+
     </div>
   )
 }

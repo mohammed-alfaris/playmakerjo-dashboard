@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { Star, EyeOff, X } from "lucide-react"
+import { Star, Eye, EyeOff, X } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { DataTable } from "@/components/shared/DataTable"
@@ -16,7 +16,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { getReviews, hideReview, type Review } from "@/api/reviews"
+import { getReviews, hideReview, restoreReview, type Review } from "@/api/reviews"
 import { getVenues } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
 import { formatDateTime } from "@/lib/formatters"
@@ -83,6 +83,15 @@ export default function ReviewsPage() {
       setHideTargetId(null)
     },
     onError: () => toast.error(t("reviewHidden")),
+  })
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => restoreReview(id),
+    onSuccess: () => {
+      toast.success(t("reviewRestored"))
+      queryClient.invalidateQueries({ queryKey: ["reviews"] })
+    },
+    onError: () => toast.error(t("something_went_wrong")),
   })
 
   const reviews: Review[] = data?.data ?? []
@@ -173,7 +182,21 @@ export default function ReviewsPage() {
       header: "",
       cell: ({ row }) => {
         const r = row.original
-        if (r.hidden) return null
+        // Hidden rows used to render with no button at all — the admin could see their
+        // own mistake and not undo it, while the venue silently kept the lowered average.
+        if (r.hidden) {
+          return (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => restoreMutation.mutate(r.id)}
+              disabled={restoreMutation.isPending}
+            >
+              <Eye className="h-3 w-3 me-1" />
+              {t("restoreReview")}
+            </Button>
+          )
+        }
         return (
           <Button
             size="sm"

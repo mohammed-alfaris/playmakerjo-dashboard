@@ -2,7 +2,7 @@ import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
-import { createUser } from "@/api/users"
+import { createUser, getUsers } from "@/api/users"
 import { useRole } from "@/hooks/useRole"
 import { USER_ROLES, USER_PERMISSIONS } from "@/lib/constants"
 import { useT } from "@/i18n/LanguageContext"
@@ -26,6 +26,14 @@ const schema = z.object({
   phone:       z.string().optional(),
   role:        z.string().min(1, "Role is required"),
   permissions: z.enum(["read", "write"]).optional(),
+  managedByOwnerId: z.string().optional(),
+}).superRefine((v, ctx) => {
+  // The server refuses staff without an employer, and rightly: an unlinked staff row
+  // resolves to no access anywhere, so it would be an account that can log in and see
+  // nothing. Caught here so the admin is told which field, rather than getting a 400.
+  if (v.role === "venue_staff" && !v.managedByOwnerId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["managedByOwnerId"], message: "Pick the owner this clerk works for" })
+  }
 })
 
 type FormValues = z.infer<typeof schema>
@@ -57,10 +65,21 @@ export function UserFormDialog({ open, onOpenChange }: Props) {
 
   const selectedRole = watch("role")
 
+  // Only fetched when an admin actually opens the dialog. This dialog is admin-only, but
+  // the same list used to be pulled for every user who opened the VENUE form — a roster of
+  // every other owner on the platform, handed out as a side effect. Keep it gated.
+  const { data: ownersData } = useQuery({
+    queryKey: ["users-owners"],
+    queryFn: () => getUsers({ role: "venue_owner", limit: 100 }),
+    enabled: isAdmin && selectedRole === "venue_staff",
+  })
+  const owners: Array<{ id: string; name: string }> = ownersData?.data ?? []
+
   // Reset permissions when role changes away from venue_staff
   useEffect(() => {
     if (selectedRole !== "venue_staff") {
       setValue("permissions", undefined)
+      setValue("managedByOwnerId", undefined)
     } else {
       setValue("permissions", "read")
     }
@@ -75,6 +94,7 @@ export function UserFormDialog({ open, onOpenChange }: Props) {
         phone:       values.phone || undefined,
         role:        values.role,
         permissions: values.role === "venue_staff" ? values.permissions : undefined,
+        managedByOwnerId: values.role === "venue_staff" ? values.managedByOwnerId : undefined,
       }),
     onSuccess: () => {
       toast.success(t("user_created"))
@@ -177,6 +197,32 @@ export function UserFormDialog({ open, onOpenChange }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* Which owner this clerk works for.
+              Staff scope everywhere is derived from this link — an unlinked staff account
+              resolves to no access at all, so it could log in and see an empty product.
+              The endpoint has always required it; only the dialog never asked. */}
+          {selectedRole === "venue_staff" && (
+            <div className="space-y-1.5">
+              <Label>{t("works_for")}</Label>
+              <Select
+                value={watch("managedByOwnerId") ?? ""}
+                onValueChange={(v) => setValue("managedByOwnerId", v, { shouldValidate: true })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={t("works_for_placeholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {owners.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.managedByOwnerId && (
+                <p className="text-xs text-destructive">{errors.managedByOwnerId.message}</p>
+              )}
             </div>
           )}
 

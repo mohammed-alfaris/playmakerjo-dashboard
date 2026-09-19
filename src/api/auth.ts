@@ -12,6 +12,10 @@ export interface AuthUser {
   role: string
   phone?: string
   avatar?: string
+  /** "read" | "write" — only present for venue_staff. */
+  permissions?: "read" | "write" | null
+  /** The venue_owner a staff account works for. Null for every other role. */
+  managedByOwnerId?: string | null
 }
 
 export interface LoginResponse {

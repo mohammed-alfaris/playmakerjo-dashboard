@@ -6,7 +6,8 @@ interface StadiumKpiProps {
   value: string | number
   prefix?: string
   suffix?: string
-  delta?: number
+  /** Null when we genuinely don't know — the chip is then omitted rather than guessed. */
+  delta?: number | null
   sparkline?: number[]
   sparkColor?: "brand" | "brand-2" | "amber" | "indigo" | "rose"
   isLoading?: boolean

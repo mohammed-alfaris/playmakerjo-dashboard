@@ -19,6 +19,11 @@ export interface CreateUserPayload {
   phone?: string
   role: string
   permissions?: "read" | "write"
+  /**
+   * Required by the server when role is venue_staff. Omitting it 400s — which is exactly
+   * what the admin dialog used to do, silently, because the field did not exist here.
+   */
+  managedByOwnerId?: string
 }
 
 export interface UsersParams {
@@ -66,5 +71,24 @@ export async function changeMyPassword(currentPassword: string, newPassword: str
 
 export async function getMe() {
   const res = await api.get("/users/me")
+  return res.data
+}
+
+export interface ResetPasswordResult {
+  userId: string
+  email: string
+  temporaryPassword: string
+}
+
+/**
+ * Set a one-off password for ANOTHER account. super_admin may reset anyone; a venue_owner may
+ * reset their own venue_staff.
+ *
+ * The plaintext comes back exactly once and is never stored anywhere in readable form — if it
+ * is lost the only remedy is another reset. It also ends that user's open sessions: the server
+ * stamps password_changed_at and /auth/refresh then refuses their existing refresh cookie.
+ */
+export async function resetUserPassword(userId: string) {
+  const res = await api.post<{ data: ResetPasswordResult }>(`/users/${userId}/reset-password`)
   return res.data
 }
