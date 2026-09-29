@@ -5,6 +5,9 @@ export interface PlatformSettings {
   maintenanceMode: boolean
   maintenanceMessageEn: string
   maintenanceMessageAr: string
+  /** Copied onto each new company when it is created; null = unlimited. */
+  defaultMaxVenues: number | null
+  defaultMaxStaff: number | null
   updatedAt: string
 }
 
@@ -13,6 +16,8 @@ export interface UpdateSettingsRequest {
   maintenanceMode?: boolean
   maintenanceMessageEn?: string
   maintenanceMessageAr?: string
+  /** Sets both defaults at once; null in either = unlimited. */
+  defaultLimits?: { maxVenues: number | null; maxStaff: number | null }
 }
 
 export async function getSettings(): Promise<{ data: PlatformSettings }> {

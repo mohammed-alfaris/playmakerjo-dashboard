@@ -89,17 +89,29 @@ export interface Usage {
 }
 
 export function isAtLimit(u: Usage | null | undefined): boolean {
-  return !!u && u.max !== null && u.used >= u.max
+  return !!u && u.max != null && u.used >= u.max
 }
 
 /** "3 / 5", or just "3" when unlimited. */
 export function formatUsage(u: Usage): string {
-  return u.max === null ? String(u.used) : `${u.used} / ${u.max}`
+  return u.max == null ? String(u.used) : `${u.used} / ${u.max}`
 }
 
 /** 0..1 for a meter; 0 when unlimited, so no bar is drawn. */
 export function usageRatio(u: Usage): number {
-  if (u.max === null) return 0
+  if (u.max == null) return 0
   if (u.max === 0) return 1
   return Math.min(1, u.used / u.max)
+}
+
+/**
+ * A limit typed into a form: empty = unlimited (null), a whole number ≥ 0 = that number,
+ * anything else = "invalid". Zero is allowed — it means "none", e.g. an owner who may not
+ * hire staff at all.
+ */
+export function parseLimit(raw: string): number | null | "invalid" {
+  const s = raw.trim()
+  if (s === "") return null
+  if (!/^\d+$/.test(s)) return "invalid"
+  return Number(s)
 }

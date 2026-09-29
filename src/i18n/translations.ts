@@ -810,6 +810,7 @@ export const translations = {
     company_name: "Company name",
     company_name_ar: "Company name (Arabic)",
     company_saved: "Company saved",
+    in_use: "In use",
   },
   ar: {
     // Nav
@@ -1617,6 +1618,7 @@ export const translations = {
     company_name: "اسم الشركة",
     company_name_ar: "اسم الشركة (عربي)",
     company_saved: "تم حفظ الشركة",
+    in_use: "مستخدم حالياً",
   },
 } as const
 

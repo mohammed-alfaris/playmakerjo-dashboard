@@ -5,6 +5,7 @@ import {
   formatUsage,
   isAtLimit,
   legacyPermissions,
+  parseLimit,
   togglePermission,
   usageRatio,
 } from "../permissions"
@@ -72,5 +73,18 @@ describe("usage", () => {
     expect(isAtLimit({ used: 0, max: 0 })).toBe(true)
     expect(usageRatio({ used: 0, max: 0 })).toBe(1)
     expect(formatUsage({ used: 0, max: 0 })).toBe("0 / 0")
+  })
+})
+
+describe("parseLimit", () => {
+  it("reads empty as unlimited and whole numbers as themselves, zero included", () => {
+    expect(parseLimit("")).toBeNull()
+    expect(parseLimit("   ")).toBeNull()
+    expect(parseLimit("0")).toBe(0)
+    expect(parseLimit(" 12 ")).toBe(12)
+  })
+
+  it("rejects anything that is not a whole number of 0 or more", () => {
+    for (const bad of ["-1", "2.5", "1e3", "abc", "3 venues"]) expect(parseLimit(bad)).toBe("invalid")
   })
 })

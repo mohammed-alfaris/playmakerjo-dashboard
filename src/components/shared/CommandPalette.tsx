@@ -41,6 +41,7 @@ const PAGES: PageItem[] = [
   { href: "/bookings",      labelKey: "nav_bookings",      icon: CalendarCheck, staffPermission: "bookings.view" },
   { href: "/staff",         labelKey: "nav_staff",         icon: UserCog,     ownerOnly: true },
   { href: "/users",         labelKey: "nav_users",         icon: Users,       adminOnly: true },
+  { href: "/companies",     labelKey: "nav_companies",     icon: Building2,   adminOnly: true },
   { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  staffPermission: "payments.view" },
   { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,   staffPermission: "reports.view" },
   { href: "/notifications", labelKey: "nav_notifications", icon: Bell,        adminOnly: true },

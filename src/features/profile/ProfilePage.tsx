@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/hooks/useAuth"
 import { updateMyProfile, changeMyPassword } from "@/api/users"
 import { useT } from "@/i18n/LanguageContext"
+import { CompanyCard } from "./CompanyCard"
 
 // ─── Profile info schema ──────────────────────────────────────────────────────
 const profileSchema = z.object({
@@ -183,6 +184,8 @@ export default function ProfilePage() {
           </div>
         </form>
       </section>
+
+      <CompanyCard />
 
       {/* ── Change password ──────────────────────────────────────────────────── */}
       <section className="rounded-xl border bg-card p-6 space-y-6">

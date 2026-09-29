@@ -169,7 +169,16 @@ const venueHandlers = [
   http.post(`${BASE}/venues`, async ({ request }) => {
     await delay(500)
     const body = withResolvedFeatures(await request.json() as Record<string, unknown>)
-    const newVenue = { id: `v${Date.now()}`, status: "active", createdAt: new Date().toISOString(), ...body }
+    const me = caller(request)
+    const ownerId = me?.role === "venue_owner" ? me.id : (body.owner_id as string | undefined)
+    const full = ownerId ? venueLimitMessage(ownerId) : null
+    if (full) return err(full, 409)
+    const owner = users.find((u) => u.id === ownerId)
+    const newVenue = {
+      id: `v${Date.now()}`, status: "active", createdAt: new Date().toISOString(),
+      ...(owner ? { owner: { id: owner.id, name: owner.name } } : {}),
+      ...body,
+    }
     venues = [newVenue as typeof venues[0], ...venues]
     return ok(newVenue, "Venue created")
   }),
@@ -243,6 +252,12 @@ const userHandlers = [
   http.patch(`${BASE}/users/:id/status`, async ({ params, request }) => {
     await delay(400)
     const body = await request.json() as { status: string }
+    // Bringing a suspended clerk back takes a seat, so it is checked like hiring.
+    const target = users.find(u => u.id === params.id) as MockUser | undefined
+    if (target?.role === "venue_staff" && target.status !== "active" && body.status === "active" && target.managedByOwnerId) {
+      const full = staffLimitMessage(target.managedByOwnerId)
+      if (full) return err(full, 409)
+    }
     users = users.map(u => u.id === params.id ? { ...u, status: body.status as "active" | "banned" } : u)
     return ok(users.find(u => u.id === params.id), "Status updated")
   }),
@@ -348,6 +363,8 @@ const staffHandlers = [
     await delay(400)
     const body = (await request.json()) as Record<string, unknown>
     if (users.some((u) => u.email === body.email)) return err("Email already in use", 400)
+    const full = staffLimitMessage(MOCK_OWNER_ID)
+    if (full) return err(full, 409)
     const role = staffRoles.find((r) => r.id === body.staffRoleId)
     const user = {
       id: `u${Date.now()}`, name: String(body.name), email: String(body.email), phone: String(body.phone ?? ""),
@@ -437,6 +454,105 @@ const staffHandlers = [
 
     user.permissions = body.permissions
     return ok(user, "Permissions updated")
+  }),
+]
+
+// ─── Companies (owners as companies, with limits) ────────────────────────────
+// Khalid (u2) is seeded at his venue limit so the disabled "Add venue" state is visible.
+const companyLimits: Record<string, { maxVenues: number | null; maxStaff: number | null }> = {
+  u2: { maxVenues: 3, maxStaff: 5 },
+}
+const companyNames: Record<string, { name?: string; nameAr?: string | null }> = {}
+
+function companyUsage(ownerId: string) {
+  const limits = companyLimits[ownerId] ?? { maxVenues: null, maxStaff: null }
+  return {
+    venues: { used: venues.filter((v) => v.owner?.id === ownerId).length, max: limits.maxVenues },
+    staff: {
+      used: (users as MockUser[]).filter((u) => u.role === "venue_staff" && u.managedByOwnerId === ownerId && u.status === "active").length,
+      max: limits.maxStaff,
+    },
+  }
+}
+
+function companyDto(ownerId: string) {
+  const owner = users.find((u) => u.id === ownerId)
+  if (!owner || owner.role !== "venue_owner") return null
+  return {
+    id: owner.id,
+    name: companyNames[ownerId]?.name ?? owner.name,
+    nameAr: companyNames[ownerId]?.nameAr ?? null,
+    ownerName: owner.name,
+    ownerEmail: owner.email,
+    ownerStatus: owner.status,
+    ...companyUsage(ownerId),
+    createdAt: owner.createdAt,
+  }
+}
+
+function venueLimitMessage(ownerId: string) {
+  const { venues: u } = companyUsage(ownerId)
+  return u.max !== null && u.used >= u.max ? `This account allows ${u.max} venues. Contact PlayMaker to add more.` : null
+}
+
+function staffLimitMessage(ownerId: string) {
+  const { staff: u } = companyUsage(ownerId)
+  return u.max !== null && u.used >= u.max ? `This account allows ${u.max} active staff. Contact PlayMaker to add more.` : null
+}
+
+const companyHandlers = [
+  http.get(`${BASE}/companies/me`, async ({ request }) => {
+    await delay(200)
+    const me = caller(request)
+    const dto = me ? companyDto(me.id) : null
+    return dto ? ok(dto) : err("Forbidden", 403)
+  }),
+
+  http.patch(`${BASE}/companies/me`, async ({ request }) => {
+    await delay(300)
+    const body = (await request.json()) as { name?: string; nameAr?: string; limits?: unknown }
+    if (body.limits !== undefined) return err("Limits are set by PlayMaker.", 403)
+    const me = caller(request)
+    if (!me || me.role !== "venue_owner") return err("Forbidden", 403)
+    if (body.name !== undefined && !body.name.trim()) return err("The company needs a name.", 400)
+    companyNames[me.id] = { ...companyNames[me.id], ...body }
+    return ok(companyDto(me.id), "Company updated")
+  }),
+
+  http.get(`${BASE}/companies`, async ({ request }) => {
+    await delay(300)
+    const url = new URL(request.url)
+    const page = Number(url.searchParams.get("page")) || 1
+    const limit = Number(url.searchParams.get("limit")) || 20
+    const search = (url.searchParams.get("search") ?? "").toLowerCase()
+    const all = users
+      .filter((u) => u.role === "venue_owner")
+      .map((u) => companyDto(u.id)!)
+      .filter((c) => !search || [c.name, c.nameAr ?? "", c.ownerName, c.ownerEmail].some((s) => s.toLowerCase().includes(search)))
+    const { data, pagination } = paginate(all, page, limit)
+    return HttpResponse.json({ success: true, data, message: "OK", pagination })
+  }),
+
+  http.patch(`${BASE}/companies/:ownerId`, async ({ params, request }) => {
+    await delay(300)
+    const ownerId = String(params.ownerId)
+    if (!companyDto(ownerId)) return err("Company not found", 404)
+    const body = (await request.json()) as {
+      name?: string; nameAr?: string; limits?: { maxVenues: number | null; maxStaff: number | null }
+    }
+    if (body.limits) {
+      const { maxVenues, maxStaff } = body.limits
+      if ((maxVenues ?? 0) < 0 || (maxStaff ?? 0) < 0) return err("Limits cannot be negative.", 400)
+      companyLimits[ownerId] = { maxVenues, maxStaff }
+    }
+    if (body.name !== undefined || body.nameAr !== undefined) {
+      companyNames[ownerId] = {
+        ...companyNames[ownerId],
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.nameAr !== undefined ? { nameAr: body.nameAr } : {}),
+      }
+    }
+    return ok(companyDto(ownerId), "Company updated")
   }),
 ]
 
@@ -900,6 +1016,7 @@ export const handlers = [
   ...venueFeatureHandlers,
   ...userHandlers,
   ...staffHandlers,
+  ...companyHandlers,
   ...customerHandlers,
   ...bookingHandlers,
   ...paymentHandlers,

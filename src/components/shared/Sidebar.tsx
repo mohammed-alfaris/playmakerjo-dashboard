@@ -15,6 +15,7 @@ import {
   Inbox,
   Settings as SettingsIcon,
   Sparkles,
+  Building2,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -56,6 +57,7 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
     items: [
       { href: "/staff",         labelKey: "nav_staff",         icon: UserCog,     roles: ["venue_owner"] },
       { href: "/users",         labelKey: "nav_users",         icon: Users,       roles: ["super_admin"] },
+      { href: "/companies",     labelKey: "nav_companies",     icon: Building2,   roles: ["super_admin"] },
       { href: "/leads",         labelKey: "nav_leads",         icon: Inbox,       roles: ["super_admin"] },
       // Opened up from super_admin: the ledger answers "what did we take yesterday" and
       // "who on my staff recorded it", which is the venue's question, not the platform's.

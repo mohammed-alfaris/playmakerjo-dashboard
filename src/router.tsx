@@ -26,6 +26,7 @@ const StaffPage = lazy(() => import("@/features/staff/StaffPage"))
 const CustomersPage = lazy(() => import("@/features/customers/CustomersPage"))
 const CustomerReportPage = lazy(() => import("@/features/customers/CustomerReportPage"))
 const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"))
+const CompaniesPage = lazy(() => import("@/features/companies/CompaniesPage"))
 
 function PageLoader() {
   return (
@@ -122,6 +123,7 @@ export const router = createBrowserRouter([
       { path: "timeline",   element: <PermissionRoute permission="bookings.view"><LazyPage><TimelinePage /></LazyPage></PermissionRoute> },
       { path: "map",        element: <AdminRoute><LazyPage><MapPage /></LazyPage></AdminRoute> },
       { path: "users",      element: <AdminRoute><LazyPage><UsersPage /></LazyPage></AdminRoute> },
+      { path: "companies",  element: <AdminRoute><LazyPage><CompaniesPage /></LazyPage></AdminRoute> },
       { path: "staff",      element: <OwnerRoute><LazyPage><StaffPage /></LazyPage></OwnerRoute> },
       // Staff reach these by their role — knowing who is on the phone is usually the
       // counter clerk's job.

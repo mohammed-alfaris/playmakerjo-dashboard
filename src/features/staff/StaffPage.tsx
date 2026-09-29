@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/shared/PageHeader"
 import { ResetPasswordFlow } from "@/components/shared/ResetPasswordFlow"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { Tabs } from "@/components/shared/design/Tabs"
+import { LimitedAddButton } from "@/components/shared/LimitedAddButton"
+import { useMyCompany } from "@/hooks/useMyCompany"
 import { Button } from "@/components/ui/button"
 import { usePagination } from "@/hooks/usePagination"
 import { useT } from "@/i18n/LanguageContext"
@@ -26,6 +28,7 @@ export default function StaffPage() {
   const [tab, setTab] = useState<TeamTab>("staff")
   const [accessTarget, setAccessTarget] = useState<StaffMember | null>(null)
   const { venues } = useTeamLookups()
+  const company = useMyCompany()
   const { page, limit, setPage } = usePagination()
   const [addOpen, setAddOpen] = useState(false)
   const [resetTarget, setResetTarget] = useState<StaffMember | null>(null)
@@ -159,7 +162,18 @@ export default function StaffPage() {
       <PageHeader
         title={t("nav_staff")}
         subtitle={t("staff_subtitle")}
-        action={tab === "staff" ? <Button onClick={() => setAddOpen(true)}>{t("staff_add")}</Button> : undefined}
+        action={
+          tab === "staff" ? (
+            <LimitedAddButton
+              usage={company?.staff}
+              usageLabel={t("usage_staff")}
+              limitMessage={t("limit_reached_staff")}
+              onClick={() => setAddOpen(true)}
+            >
+              {t("staff_add")}
+            </LimitedAddButton>
+          ) : undefined
+        }
       />
 
       <Tabs<TeamTab>
