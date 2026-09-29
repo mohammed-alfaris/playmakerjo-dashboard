@@ -549,8 +549,13 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
               >
                 {t("cancel")}
               </Button>
+              {/* Distinct keys are load-bearing. Without them React reuses one <button> for
+                  both, and Next on the step before last flips it to type="submit" while the
+                  click is still being handled — the browser then submits the form, saving the
+                  venue and closing the dialog before the last step is ever shown. */}
               {!isLastStep ? (
                 <Button
+                  key="next"
                   type="button"
                   onClick={handleNext}
                   disabled={mutation.isPending}
@@ -560,7 +565,7 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
                   <ChevronRight className="h-4 w-4 rtl:rotate-180" />
                 </Button>
               ) : (
-                <Button type="submit" disabled={mutation.isPending}>
+                <Button key="submit" type="submit" disabled={mutation.isPending}>
                   {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isEdit ? t("save_changes") : t("create_venue")}
                 </Button>
