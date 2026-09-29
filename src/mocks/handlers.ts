@@ -457,6 +457,220 @@ const staffHandlers = [
   }),
 ]
 
+// ─── Business reports ─────────────────────────────────────────────────────────
+// The seeded bookings are all from March 2025, so a real computation over "this month" would
+// show an empty report. These handlers instead generate steady, repeatable demo numbers for
+// whatever period is asked — the same date always gives the same figures.
+
+function seeded(key: string) {
+  let h = 2166136261
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619)
+  return ((h >>> 0) % 10000) / 10000
+}
+
+function reportDates(url: URL) {
+  const today = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10)
+  const from = url.searchParams.get("from") ?? `${today.slice(0, 7)}-01`
+  const to = url.searchParams.get("to") ?? today
+  const dates: string[] = []
+  for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1))
+    dates.push(d.toISOString().slice(0, 10))
+  const compare = url.searchParams.get("compare") === "true"
+  const prevEnd = new Date(`${from}T00:00:00Z`); prevEnd.setUTCDate(prevEnd.getUTCDate() - 1)
+  const prevStart = new Date(prevEnd); prevStart.setUTCDate(prevStart.getUTCDate() - dates.length + 1)
+  return {
+    dates, compare,
+    period: {
+      from, to, days: dates.length,
+      previousFrom: compare ? prevStart.toISOString().slice(0, 10) : null,
+      previousTo: compare ? prevEnd.toISOString().slice(0, 10) : null,
+    },
+  }
+}
+
+const r3 = (n: number) => Math.round(n * 1000) / 1000
+const kpi = (value: number, compare: boolean, seed: string) =>
+  ({ value: r3(value), previous: compare ? r3(value * (0.75 + seeded(seed) * 0.4)) : null })
+
+function mockDay(date: string, venueId = "") {
+  const weekend = [4, 5].includes(new Date(`${date}T00:00:00Z`).getUTCDay()) // Thu/Fri evenings
+  const k = date + venueId
+  const bookings = Math.round((weekend ? 14 : 8) + seeded(k + "b") * 6)
+  return {
+    cash: r3(bookings * 14 * (0.6 + seeded(k + "c") * 0.3)),
+    cliq: r3(bookings * 14 * (0.2 + seeded(k + "q") * 0.2)),
+    other: 0,
+    booked: bookings * 25,
+    app: Math.round(bookings * 0.45), counter: Math.round(bookings * 0.4),
+    weekly: Math.round(bookings * 0.15), series: 0,
+    cancelled: Math.round(seeded(k + "x") * 3),
+  }
+}
+
+const reportHandlers2 = [
+  http.get(`${BASE}/reports/money`, async ({ request }) => {
+    await delay(250)
+    const url = new URL(request.url)
+    const { dates, compare, period } = reportDates(url)
+    const venueId = url.searchParams.get("venue_id") ?? ""
+    const daily = dates.map((d) => ({ date: d, ...mockDay(d, venueId) }))
+    const collected = daily.reduce((s, d) => s + d.cash + d.cliq, 0)
+    const booked = daily.reduce((s, d) => s + d.booked, 0)
+    const cash = daily.reduce((s, d) => s + d.cash, 0)
+    const ownVenues = venues.filter((v) => v.owner.id === MOCK_OWNER_ID && (!venueId || v.id === venueId))
+    return ok({
+      period,
+      collected: kpi(collected, compare, "col" + period.from),
+      booked: kpi(booked, compare, "bk" + period.from),
+      outstanding: 85, outstandingCount: 3,
+      platformFee: null, net: null,
+      byMethod: [
+        { key: "cash", amount: r3(cash), count: Math.round(cash / 20) },
+        { key: "cliq", amount: r3(collected - cash), count: Math.round((collected - cash) / 20) },
+      ],
+      byKind: [
+        { key: "full", amount: r3(collected * 0.55), count: 40 },
+        { key: "deposit", amount: r3(collected * 0.25), count: 25 },
+        { key: "balance", amount: r3(collected * 0.2), count: 18 },
+      ],
+      daily: daily.map(({ date, cash, cliq, other, booked }) => ({ date, cash, cliq, other, booked })),
+      byVenue: ownVenues.map((v, i) => ({
+        venueId: v.id, name: v.name, nameAr: null,
+        collected: r3(collected / (i + 1.6)), booked: r3(booked / (i + 1.6)), bookings: Math.round(booked / 25 / (i + 1.6)),
+      })),
+      byPitch: ownVenues.map((v, i) => ({
+        venueId: v.id, venueName: v.name, pitchId: `p-${v.id}`, pitchName: `Pitch ${i + 1}`, pitchNameAr: null,
+        booked: r3(booked / (i + 1.6)), bookings: Math.round(booked / 25 / (i + 1.6)),
+      })),
+      outstandingItems: [
+        { bookingId: "b7", date: dates[0], startTime: "19:00", venueName: "Al-Ameen Football Arena", customerId: null, customerName: "Hassan Khatib", customerPhone: "+962791000012", total: 50, paid: 10, owed: 40 },
+        { bookingId: "b8", date: dates[0], startTime: "21:00", venueName: "Aqaba Beach Sports", customerId: null, customerName: "Maya Shawabkeh", customerPhone: "+962791000013", total: 44, paid: 14, owed: 30 },
+        { bookingId: "b9", date: dates[0], startTime: "18:00", venueName: "Al-Ameen Football Arena", customerId: null, customerName: "Sara Nimri", customerPhone: "+962791000011", total: 25, paid: 10, owed: 15 },
+      ],
+    })
+  }),
+
+  http.get(`${BASE}/reports/bookings`, async ({ request }) => {
+    await delay(250)
+    const url = new URL(request.url)
+    const { dates, compare, period } = reportDates(url)
+    const daily = dates.map((d) => {
+      const m = mockDay(d, url.searchParams.get("venue_id") ?? "")
+      return { date: d, app: m.app, counter: m.counter, weekly: m.weekly, series: m.series, cancelled: m.cancelled }
+    })
+    const sum = (k: "app" | "counter" | "weekly" | "series" | "cancelled") => daily.reduce((s, d) => s + d[k], 0)
+    const live = sum("app") + sum("counter") + sum("weekly")
+    const cancelled = sum("cancelled")
+    return ok({
+      period,
+      bookings: kpi(live, compare, "bn" + period.from),
+      cancelRate: kpi(Math.round((cancelled * 1000) / (live + cancelled)) / 10, compare, "cr" + period.from),
+      noShowRate: kpi(4.2, compare, "ns" + period.from),
+      attended: Math.round(live * 0.8), noShows: Math.round(live * 0.03),
+      cancelledByPerson: Math.round(cancelled * 0.6), cancelledExpired: cancelled - Math.round(cancelled * 0.6),
+      byStatus: [{ key: "completed", count: Math.round(live * 0.5) }, { key: "confirmed", count: Math.round(live * 0.5) }, { key: "cancelled", count: cancelled }],
+      byChannel: [
+        { key: "app", count: sum("app") }, { key: "counter", count: sum("counter") }, { key: "weekly", count: sum("weekly") },
+      ],
+      daily,
+      leadTime: [
+        { key: "same_day", count: Math.round(live * 0.35) }, { key: "1_2_days", count: Math.round(live * 0.4) },
+        { key: "3_7_days", count: Math.round(live * 0.2) }, { key: "8_plus_days", count: Math.round(live * 0.05) },
+      ],
+      sports: [{ key: "football", count: Math.round(live * 0.7) }, { key: "basketball", count: Math.round(live * 0.2) }, { key: "padel", count: Math.round(live * 0.1) }],
+    })
+  }),
+
+  http.get(`${BASE}/reports/occupancy`, async ({ request }) => {
+    await delay(250)
+    const url = new URL(request.url)
+    const { compare, period } = reportDates(url)
+    const grid = []
+    let open = 0, booked = 0
+    for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) {
+      const isOpen = h >= 8 && h <= 23
+      const peak = h >= 18 && h <= 22 ? 0.75 : h >= 16 ? 0.45 : 0.15
+      const weekend = d === 4 || d === 5 ? 0.15 : 0
+      const pct = isOpen ? Math.min(100, Math.round((peak + weekend + seeded(`${d}-${h}`) * 0.15) * 1000) / 10) : null
+      const o = isOpen ? period.days / 7 * 3 : 0
+      grid.push({ day: d, hour: h, openHours: o, bookedHours: pct == null ? 0 : o * pct / 100, pct })
+      open += o; booked += pct == null ? 0 : o * pct / 100
+    }
+    const open_ = grid.filter((c) => c.pct != null)
+    const byPct = [...open_].sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0))
+    return ok({
+      period,
+      occupancy: { value: Math.round((booked * 1000) / open) / 10, previous: compare ? 38.4 : null },
+      openHours: Math.round(open), bookedHours: Math.round(booked),
+      grid,
+      byPitch: venues.filter((v) => v.owner.id === MOCK_OWNER_ID).map((v, i) => ({
+        venueId: v.id, venueName: v.name, pitchId: `p-${v.id}`, pitchName: `Pitch ${i + 1}`, pitchNameAr: null,
+        openHours: Math.round(open / 3), bookedHours: Math.round(booked / 3 / (1 + i * 0.3)),
+        pct: Math.round((1000 * booked) / open / (1 + i * 0.3)) / 10,
+      })),
+      busiest: byPct.slice(0, 5),
+      quietest: byPct.slice(-5).reverse(),
+    })
+  }),
+
+  http.get(`${BASE}/reports/customers`, async ({ request }) => {
+    await delay(250)
+    const url = new URL(request.url)
+    const { compare, period } = reportDates(url)
+    const me = caller(request)
+    const top = mockCustomers.slice(0, 6).map((c, i) => ({ id: c.id, name: c.name, phone: c.phone, visits: 9 - i, paid: 180 - i * 22 }))
+    return ok({
+      period,
+      customers: me?.role === "venue_staff" && !accessOf(me).permissions.includes("customers.view") ? null : {
+        active: kpi(64, compare, "ac" + period.from), new: kpi(17, compare, "nc" + period.from),
+        returning: 47, returnRate: 73.4, lapsed: 6,
+        topByVisits: top, topBySpend: [...top].sort((a, b) => b.paid - a.paid),
+      },
+      team: me?.role === "venue_staff" ? null : [
+        { userId: MOCK_OWNER_ID, name: "Khalid Al-Natour", role: "venue_owner", payments: 38, collected: 912, cash: 700, cliq: 212, counterBookings: 22 },
+        { userId: "u6", name: "Tariq Mansour", role: "venue_staff", payments: 51, collected: 1184, cash: 1020, cliq: 164, counterBookings: 35 },
+        { userId: null, name: "app", role: "app", payments: 12, collected: 260, cash: 0, cliq: 260, counterBookings: 0 },
+      ],
+    })
+  }),
+
+  http.get(`${BASE}/reports/platform`, async ({ request }) => {
+    await delay(300)
+    const url = new URL(request.url)
+    const { dates, compare, period } = reportDates(url)
+    const daily = dates.map((d) => {
+      const m = mockDay(d, "platform")
+      return { date: d, booked: m.booked * 4, fee: r3(m.booked * 4 * 0.45 * 0.05), bookings: (m.app + m.counter + m.weekly) * 4 }
+    })
+    const booked = daily.reduce((s, d) => s + d.booked, 0)
+    const fee = daily.reduce((s, d) => s + d.fee, 0)
+    return ok({
+      period,
+      booked: kpi(booked, compare, "pb" + period.from), fee: kpi(fee, compare, "pf" + period.from),
+      collected: kpi(booked * 0.82, compare, "pc" + period.from),
+      bookings: kpi(daily.reduce((s, d) => s + d.bookings, 0), compare, "pn" + period.from),
+      appShare: kpi(45, compare, "pa" + period.from),
+      newCompanies: kpi(2, compare, "nco"), newVenues: kpi(3, compare, "nve"),
+      newPlayers: kpi(41, compare, "npl"), activeCompanies: kpi(3, compare, "aco"),
+      daily,
+      companies: users.filter((u) => u.role === "venue_owner").map((u, i) => ({
+        ownerId: u.id, name: u.name, nameAr: null, ownerStatus: u.status,
+        venues: venues.filter((v) => v.owner.id === u.id).length,
+        bookings: Math.round(daily.length * 10 / (i + 1)), booked: r3(booked / 2.2 / (i + 1)),
+        fee: r3(fee / 2.2 / (i + 1)), collected: r3(booked * 0.8 / 2.2 / (i + 1)),
+      })),
+    })
+  }),
+
+  http.get(`${BASE}/reports/export.xlsx`, async () => {
+    await delay(300)
+    // Not a real workbook in mock mode — only the download flow is exercised.
+    return new HttpResponse(new Blob(["mock workbook"]), {
+      headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    })
+  }),
+]
+
 // ─── Companies (owners as companies, with limits) ────────────────────────────
 // Khalid (u2) is seeded at his venue limit so the disabled "Add venue" state is visible.
 const companyLimits: Record<string, { maxVenues: number | null; maxStaff: number | null }> = {
@@ -1017,6 +1231,7 @@ export const handlers = [
   ...userHandlers,
   ...staffHandlers,
   ...companyHandlers,
+  ...reportHandlers2,
   ...customerHandlers,
   ...bookingHandlers,
   ...paymentHandlers,

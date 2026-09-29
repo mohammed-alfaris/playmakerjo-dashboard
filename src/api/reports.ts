@@ -89,3 +89,145 @@ export async function exportReport(params: {
   })
   return res.data
 }
+
+// ─── Business reports ────────────────────────────────────────────────────────
+// Every number is defined once on the server (Services/Reports/ReportsService.cs). Money is
+// JOD; dates are Amman calendar dates "yyyy-MM-dd".
+
+export interface ReportParams {
+  from: string
+  to: string
+  venue_id?: string
+  /** Admin only: one company's view. Ignored by the server for anyone else. */
+  owner_id?: string
+  compare?: boolean
+}
+
+/** A headline number; `previous` only when compare was asked for. */
+export interface Kpi {
+  value: number
+  previous: number | null
+}
+
+export interface PeriodInfo {
+  from: string
+  to: string
+  days: number
+  previousFrom: string | null
+  previousTo: string | null
+}
+
+export interface KeyAmount { key: string; amount: number; count: number }
+export interface KeyCount { key: string; count: number }
+
+export interface MoneyReport {
+  period: PeriodInfo
+  collected: Kpi
+  booked: Kpi
+  /** Owed right now for counter bookings already played — not tied to the period. */
+  outstanding: number
+  outstandingCount: number
+  /** Admin only; null for owners and staff. */
+  platformFee: Kpi | null
+  net: Kpi | null
+  byMethod: KeyAmount[]
+  byKind: KeyAmount[]
+  daily: { date: string; cash: number; cliq: number; other: number; booked: number }[]
+  byVenue: { venueId: string; name: string; nameAr: string | null; collected: number; booked: number; bookings: number }[]
+  byPitch: { venueId: string; venueName: string; pitchId: string; pitchName: string; pitchNameAr: string | null; booked: number; bookings: number }[]
+  outstandingItems: {
+    bookingId: string; date: string; startTime: string | null; venueName: string
+    customerId: string | null; customerName: string | null; customerPhone: string | null
+    total: number; paid: number; owed: number
+  }[]
+}
+
+export interface BookingsReport {
+  period: PeriodInfo
+  bookings: Kpi
+  cancelRate: Kpi
+  noShowRate: Kpi
+  attended: number
+  noShows: number
+  cancelledByPerson: number
+  cancelledExpired: number
+  byStatus: KeyCount[]
+  byChannel: KeyCount[]
+  daily: { date: string; app: number; counter: number; weekly: number; series: number; cancelled: number }[]
+  leadTime: KeyCount[]
+  sports: KeyCount[]
+}
+
+/** Day 0 = Sunday. `pct` null when nothing was open. */
+export interface OccupancyCell { day: number; hour: number; openHours: number; bookedHours: number; pct: number | null }
+
+export interface OccupancyReport {
+  period: PeriodInfo
+  occupancy: Kpi
+  openHours: number
+  bookedHours: number
+  grid: OccupancyCell[]
+  byPitch: { venueId: string; venueName: string; pitchId: string; pitchName: string; pitchNameAr: string | null; openHours: number; bookedHours: number; pct: number | null }[]
+  busiest: OccupancyCell[]
+  quietest: OccupancyCell[]
+}
+
+export interface TopCustomer { id: string; name: string; phone: string; visits: number; paid: number }
+
+export interface CustomersReport {
+  period: PeriodInfo
+  /** Null for staff without customers.view. */
+  customers: {
+    active: Kpi
+    new: Kpi
+    returning: number
+    returnRate: number
+    lapsed: number
+    topByVisits: TopCustomer[]
+    topBySpend: TopCustomer[]
+  } | null
+  /** Owner and admin only. `userId` null = taken by the app itself. */
+  team: {
+    userId: string | null; name: string; role: string
+    payments: number; collected: number; cash: number; cliq: number; counterBookings: number
+  }[] | null
+}
+
+export interface PlatformReport {
+  period: PeriodInfo
+  booked: Kpi
+  fee: Kpi
+  collected: Kpi
+  bookings: Kpi
+  appShare: Kpi
+  newCompanies: Kpi
+  newVenues: Kpi
+  newPlayers: Kpi
+  activeCompanies: Kpi
+  daily: { date: string; booked: number; fee: number; bookings: number }[]
+  companies: {
+    ownerId: string; name: string; nameAr: string | null; ownerStatus: string
+    venues: number; bookings: number; booked: number; fee: number; collected: number
+  }[]
+}
+
+async function report<T>(path: string, params: ReportParams): Promise<T> {
+  const res = await api.get<{ data: T }>(`/reports/${path}`, { params })
+  return res.data.data
+}
+
+export const getMoneyReport = (p: ReportParams) => report<MoneyReport>("money", p)
+export const getBookingsReport = (p: ReportParams) => report<BookingsReport>("bookings", p)
+export const getOccupancyReport = (p: ReportParams) => report<OccupancyReport>("occupancy", p)
+export const getCustomersReport = (p: ReportParams) => report<CustomersReport>("customers", p)
+export const getPlatformReport = (p: Pick<ReportParams, "from" | "to" | "compare">) =>
+  report<PlatformReport>("platform", p)
+
+/** Every report the caller may see, as one workbook. */
+export async function downloadReportExcel(p: ReportParams, lang: "en" | "ar"): Promise<Blob> {
+  const res = await api.get("/reports/export.xlsx", {
+    params: { from: p.from, to: p.to, venue_id: p.venue_id, owner_id: p.owner_id, lang },
+    responseType: "blob",
+  })
+  return res.data
+}

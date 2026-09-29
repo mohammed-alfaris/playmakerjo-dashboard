@@ -55,3 +55,9 @@ export async function updateCompany(
   const res = await api.patch<{ data: Company }>(`/companies/${ownerId}`, body)
   return res.data
 }
+
+/** Admin: one company. */
+export async function getCompany(ownerId: string): Promise<{ data: Company }> {
+  const res = await api.get<{ data: Company }>(`/companies/${ownerId}`)
+  return res.data
+}

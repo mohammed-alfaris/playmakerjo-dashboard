@@ -11,6 +11,12 @@ interface StadiumKpiProps {
   sparkline?: number[]
   sparkColor?: "brand" | "brand-2" | "amber" | "indigo" | "rose"
   isLoading?: boolean
+  /** Shown after the delta; "%" for a relative change, e.g. " pts" for a change in a rate. */
+  deltaSuffix?: string
+  /** For measures where up is bad (cancellations, no-shows): up shows red. */
+  lowerIsBetter?: boolean
+  /** A second line under the value, e.g. "12 bookings". */
+  sub?: string
 }
 
 const SPARK_COLORS: Record<NonNullable<StadiumKpiProps["sparkColor"]>, string> = {
@@ -58,6 +64,9 @@ export function StadiumKpi({
   sparkline,
   sparkColor = "brand",
   isLoading,
+  deltaSuffix = "%",
+  lowerIsBetter = false,
+  sub,
 }: StadiumKpiProps) {
   if (isLoading) {
     return (
@@ -83,11 +92,11 @@ export function StadiumKpi({
           <span
             className={cn(
               "chip px-1.5 py-0.5 text-[10px]",
-              up ? "chip-brand" : "chip-rose",
+              up === !lowerIsBetter || delta === 0 ? "chip-brand" : "chip-rose",
             )}
           >
             <span aria-hidden>{up ? "▲" : "▼"}</span>
-            <span className="num">{Math.abs(delta).toFixed(1)}%</span>
+            <span className="num">{Math.abs(delta).toFixed(1)}{deltaSuffix}</span>
           </span>
         )}
       </div>
@@ -97,6 +106,7 @@ export function StadiumKpi({
         {value}
         {suffix}
       </div>
+      {sub && <div className="mt-1.5 text-xs text-ink-3">{sub}</div>}
 
       {hasSpark && (
         <div className="mt-3 opacity-90">

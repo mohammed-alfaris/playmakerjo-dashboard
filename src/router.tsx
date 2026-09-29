@@ -27,6 +27,7 @@ const CustomersPage = lazy(() => import("@/features/customers/CustomersPage"))
 const CustomerReportPage = lazy(() => import("@/features/customers/CustomerReportPage"))
 const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"))
 const CompaniesPage = lazy(() => import("@/features/companies/CompaniesPage"))
+const ReportPrintPage = lazy(() => import("@/features/reports/ReportPrintPage"))
 
 function PageLoader() {
   return (
@@ -107,6 +108,17 @@ export const router = createBrowserRouter([
       <PublicRoute>
         <LazyPage><LoginPage /></LazyPage>
       </PublicRoute>
+    ),
+  },
+  // The PDF view: outside the app shell so nothing but the report reaches the paper.
+  {
+    path: "/reports/print",
+    element: (
+      <ProtectedRoute>
+        <PermissionRoute permission="reports.view">
+          <LazyPage><ReportPrintPage /></LazyPage>
+        </PermissionRoute>
+      </ProtectedRoute>
     ),
   },
   {

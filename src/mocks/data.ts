@@ -389,6 +389,10 @@ export const mockPayments = (mockBookings as unknown as PayableBooking[])
 // ─── Reports ─────────────────────────────────────────────────────────────────
 export const mockSummary = {
   totalRevenue: 1289,
+  // The admin cards read these; without them mock mode showed NaN.
+  ownerRevenue: 1224.55,
+  systemRevenue: 64.45,
+  platformFeePercentage: 5,
   totalBookings: 25,
   totalVenues: 8,
   totalUsers: 15,
