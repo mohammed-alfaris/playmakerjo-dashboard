@@ -21,7 +21,8 @@ export function useSessionRefresh() {
     queryKey: ["me", userId],
     queryFn: () => getMe() as Promise<{ data: AuthUser & { access?: AccessSummary } }>,
     enabled: !!userId,
-    staleTime: 60_000,
+    // One small GET per focus, so an owner's change is there the moment the clerk looks back.
+    staleTime: 0,
     refetchOnWindowFocus: true,
   })
 
