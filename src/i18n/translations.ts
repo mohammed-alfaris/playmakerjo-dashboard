@@ -942,6 +942,12 @@ export const translations = {
     report_fee_by_day: "Platform fee by day",
     report_companies: "Companies",
     report_companies_hint: "Click a company to open its reports",
+    pick_company: "Pick the company",
+    new_owner_company_hint: "A venue owner is a company. Name it now, or it takes the owner's name — you can rename it later from Companies.",
+    company_name_defaults: "Defaults to the owner's name",
+    company_name_not_saved: "The account was created, but the company name wasn't saved. Rename it from Companies.",
+    company_staff_full: "This company is at its limit of {max} team members. Raise it from Companies first.",
+    account_type: "Account type",
   },
   ar: {
     // Nav
@@ -1881,6 +1887,12 @@ export const translations = {
     report_fee_by_day: "عمولة المنصة حسب اليوم",
     report_companies: "الشركات",
     report_companies_hint: "اضغط على شركة لتفتح تقاريرها",
+    pick_company: "اختار الشركة",
+    new_owner_company_hint: "صاحب الملاعب هو شركة. سمّيها هلأ، أو بتاخد اسم المالك — وبتقدر تغيّره بعدين من الشركات.",
+    company_name_defaults: "افتراضياً اسم المالك",
+    company_name_not_saved: "انعمل الحساب، بس اسم الشركة ما انحفظ. غيّره من الشركات.",
+    company_staff_full: "هالشركة وصلت الحد الأقصى ({max}) من الموظفين. ارفعه من الشركات أولاً.",
+    account_type: "نوع الحساب",
   },
 } as const
 

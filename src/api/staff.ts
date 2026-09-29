@@ -83,9 +83,12 @@ export interface StaffRolePayload {
   permissions: string[]
 }
 
-/** The owner's roles. Two starters ("Front desk", "View only") always exist. */
-export async function getStaffRoles(): Promise<{ data: StaffRole[] }> {
-  const res = await api.get<{ data: StaffRole[] }>("/staff-roles")
+/**
+ * The owner's roles. Two starters ("Front desk", "View only") always exist. An admin passes
+ * the company's owner id; for owners the server uses their own company whatever is sent.
+ */
+export async function getStaffRoles(ownerId?: string): Promise<{ data: StaffRole[] }> {
+  const res = await api.get<{ data: StaffRole[] }>("/staff-roles", { params: ownerId ? { owner_id: ownerId } : undefined })
   return res.data
 }
 

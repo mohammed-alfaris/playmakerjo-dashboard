@@ -24,6 +24,10 @@ export interface CreateUserPayload {
    * what the admin dialog used to do, silently, because the field did not exist here.
    */
   managedByOwnerId?: string
+  /** Staff: one of that company's roles, and all its venues or only these. */
+  staffRoleId?: string
+  allVenues?: boolean
+  venueIds?: string[]
 }
 
 export interface UsersParams {

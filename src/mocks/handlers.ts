@@ -363,13 +363,16 @@ const staffHandlers = [
     await delay(400)
     const body = (await request.json()) as Record<string, unknown>
     if (users.some((u) => u.email === body.email)) return err("Email already in use", 400)
-    const full = staffLimitMessage(MOCK_OWNER_ID)
-    if (full) return err(full, 409)
+    const companyId = (body.managedByOwnerId as string | undefined) ?? MOCK_OWNER_ID
+    if (body.role === "venue_staff") {
+      const full = staffLimitMessage(companyId)
+      if (full) return err(full, 409)
+    }
     const role = staffRoles.find((r) => r.id === body.staffRoleId)
     const user = {
       id: `u${Date.now()}`, name: String(body.name), email: String(body.email), phone: String(body.phone ?? ""),
       role: String(body.role ?? "venue_staff"), status: "active" as const, avatar: "", createdAt: new Date().toISOString(),
-      permissions: "read", managedByOwnerId: MOCK_OWNER_ID,
+      permissions: "read", managedByOwnerId: body.role === "venue_staff" ? companyId : undefined,
       staffRole: role ? { id: role.id, name: role.name } : null,
       allVenues: body.allVenues !== false,
       venueIds: body.allVenues === false ? ((body.venueIds as string[]) ?? []) : [],

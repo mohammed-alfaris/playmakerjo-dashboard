@@ -9,18 +9,26 @@ export interface StaffAccessValue {
   venueIds: string[]
 }
 
-/** The owner's roles and venues — shared by the add and edit dialogs and the staff table. */
-export function useTeamLookups() {
+/**
+ * A company's roles and venues — shared by the add and edit dialogs and the staff table.
+ * Owners get their own company. An admin names the company with <c>companyId</c> (the owner's
+ * user id) and nothing is fetched until one is picked.
+ */
+export function useTeamLookups(companyId?: string) {
+  const ownerFilter = useOwnerFilter()
+  const forAdmin = companyId !== undefined
   const roles = useQuery({
-    queryKey: ["staff-roles"],
-    queryFn: getStaffRoles,
+    queryKey: forAdmin ? ["staff-roles", companyId] : ["staff-roles"],
+    queryFn: () => getStaffRoles(forAdmin ? companyId : undefined),
+    enabled: !forAdmin || !!companyId,
   })
   // The API scopes /venues to the caller's company by itself; the owner filter only keeps
   // the mock honest and the cache key per identity.
-  const ownerFilter = useOwnerFilter()
+  const venueFilter = forAdmin ? { owner_id: companyId } : ownerFilter
   const venues = useQuery({
-    queryKey: ["team-venues", ownerFilter],
-    queryFn: () => getVenues({ limit: 100, ...ownerFilter }) as Promise<{ data: Venue[] }>,
+    queryKey: ["team-venues", venueFilter],
+    queryFn: () => getVenues({ limit: 100, ...venueFilter }) as Promise<{ data: Venue[] }>,
+    enabled: !forAdmin || !!companyId,
   })
   return {
     roles: roles.data?.data ?? [],

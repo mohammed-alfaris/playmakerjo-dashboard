@@ -23,7 +23,7 @@ export default function RolesPanel() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["staff-roles"],
-    queryFn: getStaffRoles,
+    queryFn: () => getStaffRoles(),
   })
   const roles = data?.data ?? []
 
