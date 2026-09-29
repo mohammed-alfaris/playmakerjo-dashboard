@@ -40,7 +40,8 @@ export default function CustomerDetailPage() {
   const qc = useQueryClient()
   // A read-only clerk may look a customer up but not rewrite the book. The server enforces
   // this too; hiding the controls just stops the request being made at all.
-  const { canWrite } = useRole()
+  const { can } = useRole()
+  const canWrite = can("customers.manage")
   const { page, limit, setPage } = usePagination()
   const [name, setName] = useState("")
   const [note, setNote] = useState("")

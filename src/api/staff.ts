@@ -12,6 +12,11 @@ export interface StaffMember {
   avatar?: string | null
   permissions?: StaffPermission | null
   managedByOwnerId?: string | null
+  /** The company role they hold. */
+  staffRole?: { id: string; name: string } | null
+  /** True = every venue of the company; otherwise only `venueIds`. */
+  allVenues?: boolean
+  venueIds?: string[]
   createdAt: string
 }
 
@@ -25,7 +30,9 @@ export interface CreateStaffPayload {
   email: string
   password: string
   phone?: string
-  permissions: StaffPermission
+  staffRoleId: string
+  allVenues: boolean
+  venueIds: string[]
 }
 
 /**
@@ -46,12 +53,55 @@ export async function createStaff(payload: CreateStaffPayload): Promise<{ data: 
   return res.data
 }
 
-export async function updateStaffPermissions(
+export interface StaffAssignment {
+  staffRoleId?: string
+  allVenues?: boolean
+  venueIds?: string[]
+}
+
+/** Change a clerk's role and/or the venues they work at. Takes effect on their next request. */
+export async function updateStaffAssignment(
   userId: string,
-  permissions: StaffPermission,
+  assignment: StaffAssignment,
 ): Promise<{ data: StaffMember }> {
-  const res = await api.patch<{ data: StaffMember }>(`/users/${userId}/permissions`, { permissions })
+  const res = await api.patch<{ data: StaffMember }>(`/users/${userId}/staff`, assignment)
   return res.data
+}
+
+// ─── Roles ──────────────────────────────────────────────────────────────────
+
+export interface StaffRole {
+  id: string
+  name: string
+  permissions: string[]
+  /** How many of the company's staff hold it. A role in use cannot be deleted. */
+  staffCount: number
+}
+
+export interface StaffRolePayload {
+  name: string
+  permissions: string[]
+}
+
+/** The owner's roles. Two starters ("Front desk", "View only") always exist. */
+export async function getStaffRoles(): Promise<{ data: StaffRole[] }> {
+  const res = await api.get<{ data: StaffRole[] }>("/staff-roles")
+  return res.data
+}
+
+export async function createStaffRole(payload: StaffRolePayload): Promise<{ data: StaffRole }> {
+  const res = await api.post<{ data: StaffRole }>("/staff-roles", payload)
+  return res.data
+}
+
+export async function updateStaffRole(id: string, payload: Partial<StaffRolePayload>): Promise<{ data: StaffRole }> {
+  const res = await api.patch<{ data: StaffRole }>(`/staff-roles/${id}`, payload)
+  return res.data
+}
+
+/** 409 while anyone holds the role — the server's message says how many. */
+export async function deleteStaffRole(id: string): Promise<void> {
+  await api.delete(`/staff-roles/${id}`)
 }
 
 export async function updateStaffStatus(

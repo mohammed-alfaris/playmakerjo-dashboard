@@ -16,6 +16,22 @@ export interface AuthUser {
   permissions?: "read" | "write" | null
   /** The venue_owner a staff account works for. Null for every other role. */
   managedByOwnerId?: string | null
+  /**
+   * What this user may do, from GET /users/me. Absent right after login and in a session
+   * restored from storage until /users/me answers; useRole falls back to `permissions` then.
+   */
+  access?: AccessSummary
+}
+
+export interface AccessSummary {
+  /** The owner's user id — the company. Null for admins and players. */
+  companyId: string | null
+  companyName: string | null
+  staffRole?: { id: string; name: string } | null
+  permissions: string[]
+  /** True for owners, admins, and staff not limited to particular venues. */
+  allVenues: boolean
+  venueIds: string[]
 }
 
 export interface LoginResponse {

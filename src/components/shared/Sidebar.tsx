@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils"
 import { useRole } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
 import type { TranslationKey } from "@/i18n/translations"
+import type { Permission } from "@/lib/permissions"
 import { UserCard } from "./UserCard"
 
 type NavItem = {
@@ -30,6 +31,8 @@ type NavItem = {
   labelKey: TranslationKey
   icon: React.ElementType
   roles: string[]
+  /** For venue_staff only: shown when their role grants this. Owners and admins go by `roles`. */
+  permission?: Permission
 }
 
 // /schedule and /announcements entries deferred until Phases 9 + 11 ship the routes.
@@ -37,16 +40,15 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
   {
     labelKey: null,
     items: [
-      // venue_staff get the day-to-day surfaces only: the schedule and the bookings.
-      // No venues (they don't set prices), no reports (they don't see revenue), and no
-      // dashboard — every card on it is revenue or portfolio, so for staff it rendered
-      // completely empty. They are sent to the schedule instead, which is their actual job.
+      // venue_staff get the day-to-day surfaces their role allows. Never venues (they
+      // don't set prices) and never the dashboard — every card on it is revenue or
+      // portfolio, so for staff it rendered completely empty. They land on the schedule.
       { href: "/",         labelKey: "nav_dashboard", icon: LayoutDashboard, roles: ["super_admin", "venue_owner"] },
       { href: "/venues",   labelKey: "nav_venues",    icon: MapPin,          roles: ["super_admin", "venue_owner"] },
       { href: "/map",      labelKey: "nav_map",       icon: MapIcon,         roles: ["super_admin"] },
-      { href: "/timeline", labelKey: "slot_timeline", icon: CalendarClock,   roles: ["super_admin", "venue_owner", "venue_staff"] },
-      { href: "/bookings", labelKey: "nav_bookings",  icon: CalendarCheck,   roles: ["super_admin", "venue_owner", "venue_staff"] },
-      { href: "/customers", labelKey: "nav_customers", icon: Contact2,       roles: ["venue_owner", "venue_staff"] },
+      { href: "/timeline", labelKey: "slot_timeline", icon: CalendarClock,   roles: ["super_admin", "venue_owner", "venue_staff"], permission: "bookings.view" },
+      { href: "/bookings", labelKey: "nav_bookings",  icon: CalendarCheck,   roles: ["super_admin", "venue_owner", "venue_staff"], permission: "bookings.view" },
+      { href: "/customers", labelKey: "nav_customers", icon: Contact2,       roles: ["venue_owner", "venue_staff"], permission: "customers.view" },
     ],
   },
   {
@@ -57,8 +59,8 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
       { href: "/leads",         labelKey: "nav_leads",         icon: Inbox,       roles: ["super_admin"] },
       // Opened up from super_admin: the ledger answers "what did we take yesterday" and
       // "who on my staff recorded it", which is the venue's question, not the platform's.
-      { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  roles: ["super_admin", "venue_owner", "venue_staff"] },
-      { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,   roles: ["super_admin", "venue_owner"] },
+      { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  roles: ["super_admin", "venue_owner", "venue_staff"], permission: "payments.view" },
+      { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,   roles: ["super_admin", "venue_owner", "venue_staff"], permission: "reports.view" },
       { href: "/reviews",       labelKey: "reviews",           icon: Star,        roles: ["super_admin"] },
       { href: "/venue-features", labelKey: "nav_venue_features", icon: Sparkles, roles: ["super_admin"] },
       { href: "/notifications", labelKey: "nav_notifications", icon: Bell,        roles: ["super_admin"] },
@@ -113,7 +115,7 @@ export function Sidebar({
   onToggleCollapse?: () => void
   showCollapseToggle?: boolean
 }) {
-  const { role } = useRole()
+  const { role, isStaff, can } = useRole()
   const { t } = useT()
 
   return (
@@ -138,7 +140,9 @@ export function Sidebar({
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         {NAV_GROUPS.map((group, idx) => {
-          const visible = group.items.filter((it) => it.roles.includes(role ?? ""))
+          const visible = group.items.filter(
+            (it) => it.roles.includes(role ?? "") && (!isStaff || !it.permission || can(it.permission)),
+          )
           if (!visible.length) return null
           return (
             <div key={group.labelKey ?? `main-${idx}`} className="space-y-0.5">

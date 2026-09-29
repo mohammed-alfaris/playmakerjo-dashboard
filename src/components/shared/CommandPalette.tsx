@@ -16,6 +16,7 @@ import {
   Megaphone,
   Search,
   Sparkles,
+  UserCog,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRole } from "@/hooks/useRole"
@@ -23,20 +24,25 @@ import { useT } from "@/i18n/LanguageContext"
 import { useCommandPaletteStore } from "@/store/commandPaletteStore"
 import { getVenues, type Venue } from "@/api/venues"
 import type { TranslationKey } from "@/i18n/translations"
+import type { Permission } from "@/lib/permissions"
 
 interface PageItem {
   href: string
   labelKey: TranslationKey
   icon: React.ElementType
   adminOnly?: boolean
+  ownerOnly?: boolean
+  /** Shown to venue_staff only when their role grants this; without it, never. */
+  staffPermission?: Permission
 }
 const PAGES: PageItem[] = [
   { href: "/",              labelKey: "nav_dashboard",     icon: LayoutDashboard },
   { href: "/venues",        labelKey: "nav_venues",        icon: MapPin },
-  { href: "/bookings",      labelKey: "nav_bookings",      icon: CalendarCheck },
+  { href: "/bookings",      labelKey: "nav_bookings",      icon: CalendarCheck, staffPermission: "bookings.view" },
+  { href: "/staff",         labelKey: "nav_staff",         icon: UserCog,     ownerOnly: true },
   { href: "/users",         labelKey: "nav_users",         icon: Users,       adminOnly: true },
-  { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard },
-  { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3 },
+  { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  staffPermission: "payments.view" },
+  { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,   staffPermission: "reports.view" },
   { href: "/notifications", labelKey: "nav_notifications", icon: Bell,        adminOnly: true },
   { href: "/venue-features", labelKey: "nav_venue_features", icon: Sparkles,  adminOnly: true },
 ]
@@ -47,20 +53,27 @@ interface QuickAction {
   icon: React.ElementType
   run: (nav: ReturnType<typeof useNavigate>) => void
   adminOnly?: boolean
+  staffPermission?: Permission
 }
 const QUICK_ACTIONS: QuickAction[] = [
   { id: "add-venue",  labelKey: "add_venue",              icon: Building2, run: (n) => n("/venues?new=1") },
   { id: "add-user",   labelKey: "add_user",               icon: UserPlus,  run: (n) => n("/users?new=1"),         adminOnly: true },
   { id: "broadcast",  labelKey: "broadcast_announcement", icon: Megaphone, run: (n) => n("/notifications?new=1"), adminOnly: true },
-  { id: "export",     labelKey: "export_report",          icon: FileDown,  run: (n) => n("/reports?export=1") },
+  { id: "export",     labelKey: "export_report",          icon: FileDown,  run: (n) => n("/reports?export=1"), staffPermission: "reports.view" },
 ]
 
 export function CommandPalette() {
   const { open, setOpen } = useCommandPaletteStore()
   const navigate = useNavigate()
-  const { isAdmin } = useRole()
+  const { isAdmin, isOwner, isStaff, can } = useRole()
   const { t } = useT()
   const [query, setQuery] = useState("")
+
+  // Staff see only what their role reaches; everyone else goes by the admin/owner flags.
+  const allowed = (item: { adminOnly?: boolean; ownerOnly?: boolean; staffPermission?: Permission }) =>
+    isStaff
+      ? !!item.staffPermission && can(item.staffPermission)
+      : (!item.adminOnly || isAdmin) && (!item.ownerOnly || isOwner)
 
   // Global keybinding: Cmd+K / Ctrl+K toggles
   useEffect(() => {
@@ -139,7 +152,7 @@ export function CommandPalette() {
             heading={t("quick_actions")}
             className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted-foreground"
           >
-            {QUICK_ACTIONS.filter((a) => !a.adminOnly || isAdmin).map((a) => (
+            {QUICK_ACTIONS.filter(allowed).map((a) => (
               <Command.Item
                 key={a.id}
                 value={`action ${t(a.labelKey)}`}
@@ -156,7 +169,7 @@ export function CommandPalette() {
             heading={t("pages")}
             className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-muted-foreground"
           >
-            {PAGES.filter((p) => !p.adminOnly || isAdmin).map((p) => (
+            {PAGES.filter(allowed).map((p) => (
               <Command.Item
                 key={p.href}
                 value={`page ${t(p.labelKey)}`}

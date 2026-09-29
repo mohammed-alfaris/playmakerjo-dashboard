@@ -10,6 +10,7 @@ import {
   mockSportsBreakdown,
   mockCustomers,
   mockVenueFeatures,
+  mockStaffRoles,
 } from "./data"
 
 const BASE = import.meta.env.VITE_API_URL as string
@@ -57,8 +58,9 @@ const authHandlers = [
       return err("Invalid email or password", 401)
     }
 
+    // The token carries the user id so /users/me can answer for whoever signed in.
     return ok(
-      { user, accessToken: `mock-access-token-${user.role}` },
+      { user, accessToken: `mock-access-token-${user.id}` },
       "Login successful"
     )
   }),
@@ -262,8 +264,64 @@ const userHandlers = [
 
 // ─── Staff (owner's own team) ─────────────────────────────────────────────────
 // The real API derives the owner from the JWT and ignores any client-supplied id. The
-// mock has no token, so it stands in the owner whose team is seeded (u2 Khalid).
+// mock stands in the owner whose team is seeded (u2 Khalid).
 const MOCK_OWNER_ID = "u2"
+
+type MockUser = (typeof users)[number] & {
+  managedByOwnerId?: string
+  staffRole?: { id: string; name: string } | null
+  allVenues?: boolean
+  venueIds?: string[]
+}
+
+let staffRoles = [...mockStaffRoles]
+const ALL_PERMISSIONS = mockStaffRoles[0].permissions.concat("reports.view")
+
+/** Who is calling, from the mock token; a refreshed token loses it and falls back to the owner. */
+function caller(request: Request): MockUser | undefined {
+  const token = request.headers.get("Authorization")?.replace("Bearer mock-access-token-", "") ?? ""
+  return (users.find((u) => u.id === token) ?? users.find((u) => u.id === MOCK_OWNER_ID)) as MockUser | undefined
+}
+
+function roleCounts() {
+  const counts: Record<string, number> = {}
+  for (const u of users as MockUser[]) {
+    if (u.role === "venue_staff" && u.staffRole) counts[u.staffRole.id] = (counts[u.staffRole.id] ?? 0) + 1
+  }
+  return counts
+}
+
+function roleDto(r: (typeof staffRoles)[number]) {
+  return { id: r.id, name: r.name, permissions: r.permissions, staffCount: roleCounts()[r.id] ?? 0 }
+}
+
+/** Mirrors the server: anything beyond seeing an area also grants seeing it. */
+function normalizePermissions(ps: string[]) {
+  const set = new Set(ps)
+  for (const p of ps) if (!p.endsWith(".view")) set.add(`${p.split(".")[0]}.view`)
+  return ALL_PERMISSIONS.filter((p) => set.has(p))
+}
+
+function accessOf(u: MockUser) {
+  if (u.role === "venue_staff") {
+    const role = staffRoles.find((r) => r.id === u.staffRole?.id)
+    return {
+      companyId: u.managedByOwnerId ?? null,
+      companyName: users.find((o) => o.id === u.managedByOwnerId)?.name ?? null,
+      staffRole: role ? { id: role.id, name: role.name } : null,
+      permissions: role?.permissions ?? [],
+      allVenues: u.allVenues ?? true,
+      venueIds: u.allVenues === false ? (u.venueIds ?? []) : [],
+    }
+  }
+  return {
+    companyId: u.role === "venue_owner" ? u.id : null,
+    companyName: u.role === "venue_owner" ? u.name : null,
+    permissions: ALL_PERMISSIONS,
+    allVenues: true,
+    venueIds: [],
+  }
+}
 
 const staffHandlers = [
   http.get(`${BASE}/users/staff`, async ({ request }) => {
@@ -277,6 +335,95 @@ const staffHandlers = [
     )
     const { data, pagination } = paginate(staff, page, limit)
     return HttpResponse.json({ success: true, data, message: "OK", pagination })
+  }),
+
+  http.get(`${BASE}/users/me`, async ({ request }) => {
+    await delay(150)
+    const me = caller(request)
+    if (!me) return err("Unauthorized", 401)
+    return ok({ ...me, access: accessOf(me) })
+  }),
+
+  http.post(`${BASE}/users`, async ({ request }) => {
+    await delay(400)
+    const body = (await request.json()) as Record<string, unknown>
+    if (users.some((u) => u.email === body.email)) return err("Email already in use", 400)
+    const role = staffRoles.find((r) => r.id === body.staffRoleId)
+    const user = {
+      id: `u${Date.now()}`, name: String(body.name), email: String(body.email), phone: String(body.phone ?? ""),
+      role: String(body.role ?? "venue_staff"), status: "active" as const, avatar: "", createdAt: new Date().toISOString(),
+      permissions: "read", managedByOwnerId: MOCK_OWNER_ID,
+      staffRole: role ? { id: role.id, name: role.name } : null,
+      allVenues: body.allVenues !== false,
+      venueIds: body.allVenues === false ? ((body.venueIds as string[]) ?? []) : [],
+    }
+    users = [...users, user as (typeof users)[number]]
+    return ok(user, "User created")
+  }),
+
+  http.patch(`${BASE}/users/:id/staff`, async ({ params, request }) => {
+    await delay(300)
+    const body = (await request.json()) as { staffRoleId?: string; allVenues?: boolean; venueIds?: string[] }
+    const user = users.find((u) => u.id === params.id) as MockUser | undefined
+    if (!user || user.role !== "venue_staff") return err("Staff account not found", 404)
+    if (body.staffRoleId) {
+      const role = staffRoles.find((r) => r.id === body.staffRoleId)
+      if (!role) return err("That role does not exist.", 400)
+      user.staffRole = { id: role.id, name: role.name }
+    }
+    if (body.allVenues === true) {
+      user.allVenues = true
+      user.venueIds = []
+    } else if (body.allVenues === false) {
+      if (!body.venueIds?.length) return err("Choose at least one venue, or give access to all venues.", 400)
+      user.allVenues = false
+      user.venueIds = body.venueIds
+    }
+    return ok(user, "Staff updated")
+  }),
+
+  http.get(`${BASE}/staff-roles`, async () => {
+    await delay(200)
+    return ok(staffRoles.filter((r) => r.ownerId === MOCK_OWNER_ID).map(roleDto))
+  }),
+
+  http.post(`${BASE}/staff-roles`, async ({ request }) => {
+    await delay(300)
+    const body = (await request.json()) as { name?: string; permissions?: string[] }
+    const name = (body.name ?? "").trim()
+    if (!name) return err("A role needs a name.", 400)
+    if (staffRoles.some((r) => r.ownerId === MOCK_OWNER_ID && r.name === name)) {
+      return err("You already have a role with that name.", 409)
+    }
+    const role = { id: `sr_${Date.now()}`, ownerId: MOCK_OWNER_ID, name, permissions: normalizePermissions(body.permissions ?? []) }
+    staffRoles = [...staffRoles, role]
+    return ok(roleDto(role), "Role created")
+  }),
+
+  http.patch(`${BASE}/staff-roles/:id`, async ({ params, request }) => {
+    await delay(300)
+    const body = (await request.json()) as { name?: string; permissions?: string[] }
+    const role = staffRoles.find((r) => r.id === params.id)
+    if (!role) return err("Role not found", 404)
+    if (body.name !== undefined) {
+      const name = body.name.trim()
+      if (!name) return err("A role needs a name.", 400)
+      if (staffRoles.some((r) => r.ownerId === role.ownerId && r.name === name && r.id !== role.id)) {
+        return err("You already have a role with that name.", 409)
+      }
+      role.name = name
+      for (const u of users as MockUser[]) if (u.staffRole?.id === role.id) u.staffRole = { id: role.id, name }
+    }
+    if (body.permissions) role.permissions = normalizePermissions(body.permissions)
+    return ok(roleDto(role), "Role updated")
+  }),
+
+  http.delete(`${BASE}/staff-roles/:id`, async ({ params }) => {
+    await delay(300)
+    const inUse = roleCounts()[String(params.id)] ?? 0
+    if (inUse > 0) return err(`${inUse} staff member(s) have this role. Give them another role first.`, 409)
+    staffRoles = staffRoles.filter((r) => r.id !== params.id)
+    return ok(null, "Role deleted")
   }),
 
   http.patch(`${BASE}/users/:id/permissions`, async ({ params, request }) => {

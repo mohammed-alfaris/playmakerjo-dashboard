@@ -12,6 +12,7 @@ import api from "@/api/axios"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import type { Booking } from "@/api/bookings"
 import { useT } from "@/i18n/LanguageContext"
+import { useRole } from "@/hooks/useRole"
 import { formatCurrency } from "@/lib/formatters"
 import { bookingPersonName } from "@/lib/bookingParty"
 import { markBookingPaid } from "@/api/bookings"
@@ -30,6 +31,7 @@ export interface BookingDrawerProps {
 
 export function BookingDrawer({ booking, onClose, onView, onCompleted }: BookingDrawerProps) {
   const { t } = useT()
+  const { can } = useRole()
   const qc = useQueryClient()
   const startMin = parseHHMM(booking.startTime)
   const endMin = startMin + (booking.duration ?? 0)
@@ -116,7 +118,11 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
             <Button size="sm" variant="outline" className="w-full" onClick={onView}>
               {t("view_drawer")}
             </Button>
-            {booking.status === "confirmed" && (
+            {/* Completing also collects any balance, so with money owed it needs the right to
+                record payments as well — the server refuses it otherwise. */}
+            {booking.status === "confirmed" &&
+              can("bookings.manage") &&
+              (remaining <= 0.001 || can("payments.record")) && (
               <Button
                 size="sm"
                 className="w-full gap-1"
@@ -145,7 +151,7 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
                     money, so a bulk-confirmed session would otherwise read as owing forever
                     with no screen able to settle it.
                 No-show is excluded: he did not come, so there is nothing to collect for. */}
-            {remaining > 0.001 &&
+            {remaining > 0.001 && can("payments.record") &&
               ["pending", "pending_payment", "pending_review", "completed"].includes(booking.status) && (
               <Button
                 size="sm"
@@ -158,7 +164,7 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
                 {`${t("record_payment")} (${formatCurrency(remaining)})`}
               </Button>
             )}
-            {["pending", "pending_payment", "pending_review", "confirmed"].includes(
+            {can("bookings.manage") && ["pending", "pending_payment", "pending_review", "confirmed"].includes(
               booking.status,
             ) && (
               <Button

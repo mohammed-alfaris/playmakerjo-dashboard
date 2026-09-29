@@ -40,10 +40,10 @@ type FilterId = "all" | StatusGroup
 export default function TimelinePage() {
   const { t, lang } = useT()
   const ownerFilter = useOwnerFilter()
-  const { isStaff, canWrite } = useRole()
-  // Staff with "write" take bookings too — this used to be admin/owner only, which is
-  // precisely why a counter clerk could not do their job.
-  const canManage = canWrite
+  const { can } = useRole()
+  // Staff whose role lets them manage bookings take bookings too — this used to be
+  // admin/owner only, which is precisely why a counter clerk could not do their job.
+  const canManage = can("bookings.manage")
   const navigate = useNavigate()
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date())
   const [selectedId, setSelectedId] = useState<string>("")
@@ -199,9 +199,9 @@ export default function TimelinePage() {
           </div>
         </div>
         <div className="flex items-center gap-2.5">
-          {/* Staff run the schedule; they never see what it earns. "Can take bookings"
-              is about slots, not money. */}
-          {!isStaff && (
+          {/* Staff run the schedule; what it earns is for those allowed to see reports.
+              Taking bookings is about slots, not money. */}
+          {can("reports.view") && (
             <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
           )}
           <StatPill label={t("bookings_label")} value={counts.all} />
@@ -325,7 +325,7 @@ export default function TimelinePage() {
           // filter on, and hiding it would put the clerk right back where they started.
           permanents={permanents}
           // Only offered to someone who can take money, and never for a past day.
-          onRecordStanding={canManage && !isPastDate ? (p) => recordWeek.mutate(p) : undefined}
+          onRecordStanding={can("standing.manage") && !isPastDate ? (p) => recordWeek.mutate(p) : undefined}
           date={selectedDate}
           canManage={canManage && !isPastDate}
           onCreate={(args) => {

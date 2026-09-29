@@ -31,7 +31,8 @@ import { bookingPersonName } from "@/lib/bookingParty"
 export function AttendancePrompt() {
   const { t } = useT()
   const qc = useQueryClient()
-  const { canWrite } = useRole()
+  const { can } = useRole()
+  const canWrite = can("bookings.manage")
   const [dismissed, setDismissed] = useState(false)
 
   const { data: pending = [] } = useQuery({

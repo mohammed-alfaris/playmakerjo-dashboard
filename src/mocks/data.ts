@@ -13,10 +13,10 @@ export const mockUsers = [
   { id: "u3",  name: "Rania Haddad",     email: "rania@venues.jo",       phone: "+962791000003", role: "venue_owner", status: "active", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Rania",   createdAt: "2024-02-15T10:00:00Z" },
   { id: "u4",  name: "Omar Farouq",      email: "omar.f@venues.jo",      phone: "+962791000004", role: "venue_owner", status: "banned", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Omar",    createdAt: "2024-03-01T11:00:00Z" },
   { id: "u5",  name: "Lina Barakat",     email: "lina.b@venues.jo",      phone: "+962791000005", role: "venue_owner", status: "active", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Lina",    createdAt: "2024-03-20T08:30:00Z" },
-  // Staff belong to an owner (u2 Khalid) and carry a read/write level — that link is what
-  // decides which venues they can touch.
-  { id: "u6",  name: "Tariq Mansour",    email: "tariq@staff.jo",        phone: "+962791000006", role: "venue_staff", status: "active", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Tariq",   createdAt: "2024-04-01T09:00:00Z", permissions: "write", managedByOwnerId: "u2" },
-  { id: "u7",  name: "Dina Saleh",       email: "dina@staff.jo",         phone: "+962791000007", role: "venue_staff", status: "active", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Dina",    createdAt: "2024-04-05T10:00:00Z", permissions: "read",  managedByOwnerId: "u2" },
+  // Staff belong to an owner (u2 Khalid) and hold one of that company's roles. Tariq works
+  // every venue; Dina only the Al-Ameen arena — so the mock shows both kinds of scope.
+  { id: "u6",  name: "Tariq Mansour",    email: "tariq@staff.jo",        phone: "+962791000006", role: "venue_staff", status: "active", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Tariq",   createdAt: "2024-04-01T09:00:00Z", permissions: "write", managedByOwnerId: "u2", staffRole: { id: "sr_frontdesk", name: "Front desk" }, allVenues: true,  venueIds: [] as string[] },
+  { id: "u7",  name: "Dina Saleh",       email: "dina@staff.jo",         phone: "+962791000007", role: "venue_staff", status: "active", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Dina",    createdAt: "2024-04-05T10:00:00Z", permissions: "read",  managedByOwnerId: "u2", staffRole: { id: "sr_viewonly", name: "View only" },   allVenues: false, venueIds: ["v1"] },
   { id: "u8",  name: "Faisal Al-Zoubi",  email: "faisal.z@player.jo",    phone: "+962791000008", role: "player",      status: "active", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Faisal",  createdAt: "2024-05-01T07:00:00Z" },
   { id: "u9",  name: "Nour Khalil",      email: "nour.k@player.jo",      phone: "+962791000009", role: "player",      status: "active", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Nour",    createdAt: "2024-05-10T08:00:00Z" },
   { id: "u10", name: "Youssef Amawi",    email: "youssef@player.jo",     phone: "+962791000010", role: "player",      status: "banned", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Youssef", createdAt: "2024-05-15T09:00:00Z" },
@@ -440,4 +440,23 @@ export const mockVenueFeatures = [
   { id: "vf-prayer-room",    name: "Prayer room",       nameAr: "مصلى",               icon: "prayer_room",   sortOrder: 100, isActive: true },
   { id: "vf-first-aid",      name: "First aid",         nameAr: "إسعافات أولية",      icon: "first_aid",     sortOrder: 110, isActive: true },
   { id: "vf-restrooms",      name: "Restrooms",         nameAr: "دورات مياه",         icon: "restroom",      sortOrder: 120, isActive: true },
+]
+
+// ─── Staff roles (company u2) ────────────────────────────────────────────────
+// The two starters every company gets, plus one custom role, as an owner would have after
+// a week of use.
+export const mockStaffRoles = [
+  {
+    id: "sr_frontdesk", ownerId: "u2", name: "Front desk",
+    permissions: ["bookings.view", "bookings.manage", "payments.view", "payments.record", "customers.view",
+      "customers.export", "customers.manage", "standing.view", "standing.manage"],
+  },
+  {
+    id: "sr_viewonly", ownerId: "u2", name: "View only",
+    permissions: ["bookings.view", "payments.view", "customers.view", "customers.export", "standing.view"],
+  },
+  {
+    id: "sr_cashier", ownerId: "u2", name: "Cashier",
+    permissions: ["bookings.view", "payments.view", "payments.record"],
+  },
 ]

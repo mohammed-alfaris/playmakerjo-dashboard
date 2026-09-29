@@ -1,10 +1,11 @@
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
-import { createStaff, type StaffPermission } from "@/api/staff"
+import { createStaff } from "@/api/staff"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -16,6 +17,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useT } from "@/i18n/LanguageContext"
+import { StaffAccessFields } from "./StaffAccessFields"
+import { defaultRoleId, useTeamLookups, validateAccess, type StaffAccessValue } from "./teamAccess"
 
 /**
  * Deliberately a fork of UserFormDialog rather than a reuse of it. That dialog carries a
@@ -28,7 +31,6 @@ const schema = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "At least 8 characters"),
   phone: z.string().optional(),
-  permissions: z.enum(["read", "write"]),
 })
 
 type FormValues = z.infer<typeof schema>
@@ -46,28 +48,27 @@ export default function StaffFormDialog({
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
     reset,
     setError,
     formState: { errors },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    // "read", matching the API's own default when the field is absent
-    // (UsersController.cs: req.Permissions ?? "read"). The two used to disagree, and the
-    // failure modes are not symmetric: a clerk who cannot click something says so within
-    // the hour, while a clerk silently granted write says nothing at all.
-    defaultValues: { permissions: "read" },
-  })
+  } = useForm<FormValues>({ resolver: zodResolver(schema) })
 
-  const permissions = watch("permissions")
+  const { roles, venues } = useTeamLookups()
+  const blankAccess: StaffAccessValue = { staffRoleId: "", allVenues: true, venueIds: [] }
+  const [picked, setAccess] = useState<StaffAccessValue>(blankAccess)
+  const [accessError, setAccessError] = useState<string | null>(null)
+  // Roles can arrive after the dialog opens; until the owner picks one, show the default.
+  const access = { ...picked, staffRoleId: picked.staffRoleId || defaultRoleId(roles) }
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) => createStaff(values),
+    mutationFn: (values: FormValues) => createStaff({ ...values, ...access }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["staff"] })
+      qc.invalidateQueries({ queryKey: ["staff-roles"] })
+      qc.invalidateQueries({ queryKey: ["company"] })
       toast.success(t("staff_created"))
-      reset({ permissions: "read" })
+      reset()
+      setAccess(blankAccess)
       onOpenChange(false)
     },
     onError: (err: unknown) => {
@@ -85,13 +86,21 @@ export default function StaffFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[440px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>{t("staff_add")}</DialogTitle>
         </DialogHeader>
 
         <form
-          onSubmit={handleSubmit((v) => mutation.mutate(v))}
+          onSubmit={handleSubmit((v) => {
+            const bad = validateAccess(access)
+            if (bad) {
+              setAccessError(bad === "role" ? t("staff_role_pick") : t("staff_venues_pick"))
+              return
+            }
+            setAccessError(null)
+            mutation.mutate(v)
+          })}
           className="space-y-4"
         >
           <div className="space-y-1.5">
@@ -124,35 +133,13 @@ export default function StaffFormDialog({
             <Input id="staff-phone" type="tel" dir="ltr" placeholder="+962791000000" {...register("phone")} />
           </div>
 
-          <div className="space-y-2">
-            <Label>{t("staff_permission")}</Label>
-            <div className="grid gap-2">
-              {(["write", "read"] as StaffPermission[]).map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => setValue("permissions", level)}
-                  className={
-                    "rounded-lg border p-3 text-start transition-colors " +
-                    (permissions === level
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-muted/40")
-                  }
-                >
-                  <div className="text-sm font-medium">
-                    {level === "write"
-                      ? t("staff_permission_write")
-                      : t("staff_permission_read")}
-                  </div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">
-                    {level === "write"
-                      ? t("staff_permission_write_hint")
-                      : t("staff_permission_read_hint")}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+          <StaffAccessFields
+            value={access}
+            onChange={setAccess}
+            roles={roles}
+            venues={venues}
+            error={accessError}
+          />
 
           <DialogFooter>
             <Button

@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react"
 import { createBrowserRouter, Navigate } from "react-router-dom"
 import AppLayout from "@/components/shared/AppLayout"
 import { useAuthStore } from "@/store/authStore"
+import { useRole } from "@/hooks/useRole"
+import type { Permission } from "@/lib/permissions"
 
 // Lazy-loaded pages
 const LoginPage = lazy(() => import("@/features/auth/LoginPage"))
@@ -68,13 +70,32 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Pages a clerk reaches only if their role grants `permission`. Owners and admins always
+ * pass. The server checks the same key on every request; this only avoids opening a page
+ * whose every call would 403.
+ */
+function PermissionRoute({ permission, children }: { permission: Permission; children: React.ReactNode }) {
+  const { can } = useRole()
+  if (!can(permission)) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+/**
  * The dashboard is entirely revenue and portfolio cards, all gated to admin/owner, so a
  * staff member landing on it saw a blank page. Send them to the schedule — the screen
- * they actually work in all day.
+ * they actually work in all day — or, for a role without it, the first page they have.
  */
 function HomeRoute() {
-  const user = useAuthStore((s) => s.user)
-  if (user?.role === "venue_staff") return <Navigate to="/timeline" replace />
+  const { isStaff, can } = useRole()
+  if (isStaff) {
+    const home =
+      can("bookings.view") ? "/timeline"
+      : can("customers.view") ? "/customers"
+      : can("payments.view") ? "/payments"
+      : can("reports.view") ? "/reports"
+      : "/profile"
+    return <Navigate to={home} replace />
+  }
   return <LazyPage><DashboardPage /></LazyPage>
 }
 
@@ -98,17 +119,18 @@ export const router = createBrowserRouter([
       { index: true, element: <HomeRoute /> },
       { path: "venues",     element: <LazyPage><VenuesPage /></LazyPage> },
       { path: "venues/:id", element: <LazyPage><VenueDetailPage /></LazyPage> },
-      { path: "timeline",   element: <LazyPage><TimelinePage /></LazyPage> },
+      { path: "timeline",   element: <PermissionRoute permission="bookings.view"><LazyPage><TimelinePage /></LazyPage></PermissionRoute> },
       { path: "map",        element: <AdminRoute><LazyPage><MapPage /></LazyPage></AdminRoute> },
       { path: "users",      element: <AdminRoute><LazyPage><UsersPage /></LazyPage></AdminRoute> },
       { path: "staff",      element: <OwnerRoute><LazyPage><StaffPage /></LazyPage></OwnerRoute> },
-      // Staff reach this too — knowing who is on the phone is the counter clerk's job.
-      { path: "customers",  element: <LazyPage><CustomersPage /></LazyPage> },
-      { path: "customers/report", element: <LazyPage><CustomerReportPage /></LazyPage> },
-      { path: "customers/:id", element: <LazyPage><CustomerDetailPage /></LazyPage> },
-      { path: "bookings",   element: <LazyPage><BookingsPage /></LazyPage> },
-      { path: "payments",   element: <LazyPage><PaymentsPage /></LazyPage> },
-      { path: "reports",        element: <LazyPage><ReportsPage /></LazyPage> },
+      // Staff reach these by their role — knowing who is on the phone is usually the
+      // counter clerk's job.
+      { path: "customers",  element: <PermissionRoute permission="customers.view"><LazyPage><CustomersPage /></LazyPage></PermissionRoute> },
+      { path: "customers/report", element: <PermissionRoute permission="customers.view"><LazyPage><CustomerReportPage /></LazyPage></PermissionRoute> },
+      { path: "customers/:id", element: <PermissionRoute permission="customers.view"><LazyPage><CustomerDetailPage /></LazyPage></PermissionRoute> },
+      { path: "bookings",   element: <PermissionRoute permission="bookings.view"><LazyPage><BookingsPage /></LazyPage></PermissionRoute> },
+      { path: "payments",   element: <PermissionRoute permission="payments.view"><LazyPage><PaymentsPage /></LazyPage></PermissionRoute> },
+      { path: "reports",        element: <PermissionRoute permission="reports.view"><LazyPage><ReportsPage /></LazyPage></PermissionRoute> },
       { path: "notifications", element: <AdminRoute><LazyPage><NotificationsPage /></LazyPage></AdminRoute> },
       { path: "reviews",    element: <AdminRoute><LazyPage><ReviewsPage /></LazyPage></AdminRoute> },
       { path: "leads",      element: <AdminRoute><LazyPage><LeadsPage /></LazyPage></AdminRoute> },

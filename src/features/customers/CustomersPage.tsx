@@ -9,6 +9,7 @@ import { getCustomers, exportCustomers, type Customer, type CustomerSegment } fr
 import { DataTable } from "@/components/shared/DataTable"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { usePagination } from "@/hooks/usePagination"
+import { useRole } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
 import { formatDate, formatCurrency } from "@/lib/formatters"
 
@@ -22,6 +23,7 @@ const SEGMENTS: { key: CustomerSegment; labelKey: Parameters<ReturnType<typeof u
 
 export default function CustomersPage() {
   const { t } = useT()
+  const { can } = useRole()
   const navigate = useNavigate()
   const { page, limit, setPage, resetPage } = usePagination()
   const [rawSearch, setRawSearch] = useState("")
@@ -154,10 +156,11 @@ export default function CustomersPage() {
         subtitle={t("customers_subtitle")}
         action={
           <div className="flex items-center gap-2">
-            {/* Ungated on purpose, and placed in the header rather than buried in a menu.
-                In a market where owners have been burned by platforms holding their
-                customer list hostage, a visible export button is the cheapest credible
-                proof that this one will not. */}
+            {/* In the header rather than buried in a menu. In a market where owners have been
+                burned by platforms holding their customer list hostage, a visible export
+                button is the cheapest credible proof that this one will not. Owners always
+                have it; a clerk only if their role grants it. */}
+            {can("customers.export") && (
             <Button
               variant="outline"
               size="sm"
@@ -170,6 +173,7 @@ export default function CustomersPage() {
                 : <Download className="h-3.5 w-3.5" />}
               {t("export_customers")}
             </Button>
+            )}
             <Button asChild variant="outline" size="sm" className="gap-1.5">
               <Link to="/customers/report">
                 <BarChart3 className="h-3.5 w-3.5" />

@@ -46,11 +46,10 @@ export default function BookingsPage() {
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
   const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
-  // canWrite, not isAdmin || isOwner: a clerk with "write" may already do all of this from
-  // the Timeline and the API accepts it (VenueAccess.CanWrite). Gating here on ownership
-  // made the same clerk read-only on this page — the app silently disagreed with itself
-  // about what "write" means depending on which screen you were standing on.
-  const { canWrite } = useRole()
+  // By permission, not by role: a clerk whose role grants these may do all of it from the
+  // Timeline too, and the API checks the same keys. Gating here on ownership made the same
+  // clerk read-only on this page — the app disagreeing with itself screen to screen.
+  const { can } = useRole()
 
   const cancelSeriesMutation = useMutation({
     mutationFn: (groupId: string) => cancelSeries(groupId),
@@ -319,7 +318,7 @@ export default function BookingsPage() {
         const remaining = Math.max(0, (b.totalAmount ?? b.amount) - (b.amountPaid ?? 0))
         return (
           <div className="flex items-center gap-2">
-            {b.paymentMethod === "cliq" && b.paymentProofStatus && (
+            {b.paymentMethod === "cliq" && b.paymentProofStatus && can("payments.record") && (
               <Button
                 size="sm"
                 variant="outline"
@@ -329,7 +328,7 @@ export default function BookingsPage() {
                 {t("review_proof")}
               </Button>
             )}
-            {b.recurringGroupId && b.status !== "cancelled" && (
+            {b.recurringGroupId && b.status !== "cancelled" && can("bookings.manage") && (
               <Button
                 size="sm"
                 variant="outline"
@@ -340,8 +339,9 @@ export default function BookingsPage() {
                 {t("cancel_series")}
               </Button>
             )}
-            {b.status === "confirmed" && canWrite && (
+            {b.status === "confirmed" && can("bookings.manage") && (
               <>
+                {(remaining <= 0.001 || can("payments.record")) && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -355,6 +355,7 @@ export default function BookingsPage() {
                     ? `${t("mark_completed")} (${formatCurrency(remaining)})`
                     : t("mark_completed")}
                 </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -366,7 +367,7 @@ export default function BookingsPage() {
                 </Button>
               </>
             )}
-            {CANCELLABLE_STATUSES.includes(b.status) && canWrite && (
+            {CANCELLABLE_STATUSES.includes(b.status) && can("bookings.manage") && (
               <Button
                 size="sm"
                 variant="outline"

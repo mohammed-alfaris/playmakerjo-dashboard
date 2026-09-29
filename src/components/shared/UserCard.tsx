@@ -11,18 +11,17 @@ import { logout as logoutApi } from "@/api/auth"
 export function UserCard({ collapsed }: { collapsed?: boolean }) {
   const navigate = useNavigate()
   const { user, logout: storeLogout } = useAuth()
-  const { isOwner, isStaff, staffPermission } = useRole()
+  const { isOwner, isStaff, staffRoleName } = useRole()
   const { t } = useT()
 
   // This used to be `isOwner ? owner : super_admin` — a two-way branch that labelled
   // anyone who was not an owner as Super Admin. The moment staff could log in, a counter
-  // clerk saw "Super Admin" under their own name.
+  // clerk saw "Super Admin" under their own name. Staff now see the role their owner gave
+  // them, e.g. "Front desk".
   const roleLabel = isOwner
     ? t("owner_badge")
     : isStaff
-      ? staffPermission === "write"
-        ? t("staff_permission_write")
-        : t("staff_permission_read")
+      ? (staffRoleName ?? t("role_venue_staff"))
       : t("role_super_admin")
 
   const initials = user?.name

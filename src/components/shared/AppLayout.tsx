@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/hooks/useSidebar"
+import { useSessionRefresh } from "@/hooks/useSessionRefresh"
 import { Sidebar } from "./Sidebar"
 import { TopHeader } from "./TopHeader"
 import { QuickActionFab } from "./QuickActionFab"
@@ -13,6 +14,7 @@ import { CommandPalette } from "./CommandPalette"
 
 export default function AppLayout() {
   const { collapsed, toggle } = useSidebar()
+  useSessionRefresh()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isDark, setIsDark] = useState<boolean>(() => {
     const stored = typeof window !== "undefined" ? window.localStorage.getItem("theme") : null
