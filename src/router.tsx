@@ -28,6 +28,7 @@ const CustomerReportPage = lazy(() => import("@/features/customers/CustomerRepor
 const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetailPage"))
 const CompaniesPage = lazy(() => import("@/features/companies/CompaniesPage"))
 const ReportPrintPage = lazy(() => import("@/features/reports/ReportPrintPage"))
+const ReceiptPage = lazy(() => import("@/features/bookings/ReceiptPage"))
 
 function PageLoader() {
   return (
@@ -117,6 +118,17 @@ export const router = createBrowserRouter([
       <ProtectedRoute>
         <PermissionRoute permission="reports.view">
           <LazyPage><ReportPrintPage /></LazyPage>
+        </PermissionRoute>
+      </ProtectedRoute>
+    ),
+  },
+  // A receipt for the counter, also outside the shell: only the receipt reaches the paper.
+  {
+    path: "/bookings/:id/receipt",
+    element: (
+      <ProtectedRoute>
+        <PermissionRoute permission="payments.view">
+          <LazyPage><ReceiptPage /></LazyPage>
         </PermissionRoute>
       </ProtectedRoute>
     ),

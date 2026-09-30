@@ -12,6 +12,8 @@ import {
   mockVenueFeatures,
   mockStaffRoles,
 } from "./data"
+import type { Booking, RefundChoice } from "@/api/bookings"
+import { cancelPreview, refundFor } from "@/lib/cancellation"
 
 const BASE = import.meta.env.VITE_API_URL as string
 
@@ -23,6 +25,35 @@ const bookings = [...mockBookings]
 const payments = [...mockPayments]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+/** Blocked time created in this session. */
+const mockBlocks: { id: string; venueId: string; pitchId: string | null; startsAt: string; endsAt: string; reason: string | null; createdAt: string }[] = []
+
+function minToHHMM(min: number) {
+  const m = ((min % 1440) + 1440) % 1440
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`
+}
+
+/** A refund or correction: a negative ledger row, and the booking's paid amount comes down. */
+function moneyBack(b: Record<string, unknown>, amount: number, kind: "refund" | "correction", note?: string) {
+  b.amountPaid = Math.round((Number(b.amountPaid ?? 0) - amount) * 1000) / 1000
+  if (Number(b.amountPaid) <= 0) b.depositPaid = false
+  payments.unshift({
+    id: `pay-${String(b.id)}-${kind}-${Date.now().toString(36)}`,
+    bookingRef: String(b.id),
+    player: b.player,
+    customer: b.customer,
+    payerName: (b.customer as { name?: string } | null)?.name ?? (b.player as { name: string }).name,
+    recordedBy: { id: "u2", name: "Khalid Al-Natour" },
+    venue: b.venue,
+    status: "paid",
+    amount: -amount,
+    method: String(b.paymentMethod ?? "cash"),
+    kind,
+    note: note ?? null,
+    date: new Date().toISOString(),
+  } as never)
+}
+
 function paginate<T>(arr: T[], page = 1, limit = 20) {
   const start = (page - 1) * limit
   return {
@@ -1118,13 +1149,132 @@ const bookingHandlers = [
    * drawer silently failed in mock mode — including the cancel-then-rebook sequence that
    * exposed cancelled bookings still being drawn on the schedule.
    */
-  http.patch(`${BASE}/bookings/:id/cancel`, async ({ params }) => {
+  // Cancel applies the venue's free-cancellation window like the server; "all"/"none" overrule it.
+  http.patch(`${BASE}/bookings/:id/cancel`, async ({ params, request }) => {
     await delay(250)
     const b = bookings.find((x) => (x as { id: string }).id === params.id) as Record<string, unknown> | undefined
     if (!b) return err("Booking not found", 404)
     if (b.status === "cancelled") return err("Booking is already cancelled", 400)
+    const body = await request.json().catch(() => ({})) as { refund?: RefundChoice }
+    const booking = b as unknown as Booking
+    const venue = venues.find((v) => v.id === booking.venue.id) as { freeCancelHours?: number } | undefined
+    booking.venue.freeCancelHours = venue?.freeCancelHours ?? 24
+    const refund = refundFor(cancelPreview(booking, Date.now()), body.refund ?? "policy")
     b.status = "cancelled"
-    return ok(b, "Booking cancelled successfully")
+    if (refund > 0) moneyBack(b, refund, "refund", "Refunded on cancellation")
+    return ok(b, refund > 0 ? `Booking cancelled; ${refund} JOD refunded` : "Booking cancelled successfully")
+  }),
+
+  http.post(`${BASE}/bookings/:id/refund`, async ({ params, request }) => {
+    await delay(250)
+    const b = bookings.find((x) => (x as { id: string }).id === params.id) as Record<string, unknown> | undefined
+    if (!b) return err("Booking not found", 404)
+    const body = await request.json() as { amount: number; kind: "refund" | "correction"; note?: string }
+    const paid = Number(b.amountPaid ?? 0)
+    if (!(body.amount > 0)) return err("Enter an amount to refund.", 400)
+    if (body.amount > paid + 0.0005) return err(`Only ${paid} JOD has been paid on this booking.`, 400)
+    moneyBack(b, body.amount, body.kind, body.note)
+    return ok(b, body.kind === "refund" ? "Refund recorded" : "Correction recorded")
+  }),
+
+  // Move / re-price. The mock checks clashes on the same venue and day only.
+  http.patch(`${BASE}/bookings/:id`, async ({ params, request }) => {
+    await delay(300)
+    const b = bookings.find((x) => (x as { id: string }).id === params.id) as Record<string, unknown> | undefined
+    if (!b) return err("Booking not found", 404)
+    const body = await request.json() as Record<string, string | number | undefined>
+    const date = String(body.date ?? String(b.date).slice(0, 10))
+    const startTime = String(body.startTime ?? b.startTime ?? "00:00")
+    const duration = Number(body.duration ?? b.duration ?? 60)
+    const toMin = (hhmm: string) => { const [h, m] = hhmm.split(":").map(Number); return (h || 0) * 60 + (m || 0) }
+    const venueId = (b.venue as { id: string }).id
+    const start = toMin(startTime)
+    const clash = bookings.some((x) => {
+      const row = x as unknown as { id: string; venue?: { id?: string }; date?: string; status?: string; startTime?: string; duration?: number }
+      if (row.id === b.id || row.venue?.id !== venueId || row.status === "cancelled") return false
+      if (String(row.date ?? "").slice(0, 10) !== date) return false
+      const s = toMin(String(row.startTime ?? "00:00"))
+      return s < start + duration && start < s + Number(row.duration ?? 60)
+    })
+    if (clash) return err("Time slot conflicts with an existing booking", 409)
+    if (mockBlocks.some((k) => k.venueId === venueId && k.startsAt < `${date}T${minToHHMM(start + duration)}` && k.endsAt > `${date}T${startTime}`))
+      return err("The venue is blocked at that time.", 409)
+    const oldDuration = Number(b.duration ?? 60)
+    b.date = `${date}T${startTime}:00Z`
+    b.startTime = startTime
+    b.duration = duration
+    if (body.totalAmount != null) {
+      b.totalAmount = b.amount = Number(body.totalAmount)
+    } else if (duration !== oldDuration) {
+      b.totalAmount = b.amount = Math.round(Number(b.totalAmount ?? b.amount) / oldDuration * duration * 1000) / 1000
+    }
+    return ok(b, "Booking updated")
+  }),
+
+  http.get(`${BASE}/bookings/:id/receipt`, async ({ params }) => {
+    await delay(200)
+    const b = bookings.find((x) => (x as { id: string }).id === params.id) as unknown as Booking | undefined
+    if (!b) return err("Booking not found", 404)
+    const rows = payments.filter((p) => (p as { bookingRef?: string }).bookingRef === b.id) as unknown as
+      { date: string; amount: number; method?: string; kind?: string; note?: string }[]
+    const total = b.totalAmount ?? b.amount
+    return ok({
+      receiptNumber: b.id.toUpperCase(),
+      issuedAt: new Date().toISOString(),
+      companyName: "Al-Natour Sports",
+      venueName: b.venue.name,
+      venueCity: b.venue.city ?? "Amman",
+      customerName: b.customer?.name ?? b.player.name,
+      customerPhone: b.customer?.phone ?? null,
+      sport: b.sport,
+      pitchName: null,
+      pitchSize: b.pitchSize ?? null,
+      date: b.date.slice(0, 10),
+      startTime: b.startTime,
+      duration: b.duration,
+      status: b.status,
+      totalAmount: total,
+      amountPaid: b.amountPaid ?? 0,
+      balance: Math.max(0, total - (b.amountPaid ?? 0)),
+      payments: rows.map((p) => ({ date: p.date, amount: p.amount, method: p.method, kind: p.kind, note: p.note })),
+    })
+  }),
+
+  // ─── Blocked time ───────────────────────────────────────────────────────────
+  http.get(`${BASE}/venues/:id/blocks`, async ({ params }) => {
+    await delay(150)
+    return ok(mockBlocks.filter((k) => k.venueId === params.id))
+  }),
+
+  http.post(`${BASE}/venues/:id/blocks`, async ({ params, request }) => {
+    await delay(250)
+    const body = await request.json() as { pitchId?: string | null; startsAt: string; endsAt: string; reason?: string }
+    if (body.endsAt <= body.startsAt) return err("The block must end after it starts", 400)
+    const block = {
+      id: `blk_mock_${Date.now().toString(36)}`, venueId: String(params.id), pitchId: body.pitchId ?? null,
+      startsAt: body.startsAt, endsAt: body.endsAt, reason: body.reason ?? null, createdAt: new Date().toISOString(),
+    }
+    mockBlocks.push(block)
+    const overlapping = bookings.filter((x) => {
+      const row = x as unknown as { venue?: { id?: string }; date?: string; status?: string; startTime?: string; duration?: number }
+      if (row.venue?.id !== params.id || row.status === "cancelled" || !row.startTime) return false
+      const [h, m] = row.startTime.split(":").map(Number)
+      const from = `${String(row.date).slice(0, 10)}T${row.startTime}`
+      const to = `${String(row.date).slice(0, 10)}T${minToHHMM(h * 60 + m + Number(row.duration ?? 60))}`
+      return from < block.endsAt && to > block.startsAt
+    }).map((x) => {
+      const row = x as unknown as Booking
+      return { id: row.id, date: row.date.slice(0, 10), startTime: row.startTime, duration: row.duration, pitchId: row.pitchId, customerName: row.customer?.name ?? null, status: row.status }
+    })
+    return ok({ block, overlappingBookings: overlapping }, "Time blocked")
+  }),
+
+  http.delete(`${BASE}/venues/:id/blocks/:blockId`, async ({ params }) => {
+    await delay(200)
+    const i = mockBlocks.findIndex((k) => k.id === params.blockId)
+    if (i < 0) return err("Block not found", 404)
+    mockBlocks.splice(i, 1)
+    return ok(null, "Block removed")
   }),
 
   http.patch(`${BASE}/bookings/:id/complete`, async ({ params }) => {

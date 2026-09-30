@@ -19,7 +19,8 @@ export interface Payment {
   amount: number
   method: string
   /** What this row settled — rows are deltas, so a booking can have both. */
-  kind: "deposit" | "balance" | "full"
+  /** refund / correction rows carry a negative amount. */
+  kind: "deposit" | "balance" | "full" | "refund" | "correction"
   status: "paid" | "pending" | "failed" | "refunded"
   note?: string
   date: string

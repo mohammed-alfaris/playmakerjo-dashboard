@@ -14,7 +14,8 @@ import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { getBookings, cancelSeries, cancelBooking, completeBooking, markNoShow, type Booking } from "@/api/bookings"
+import { getBookings, cancelSeries, completeBooking, markNoShow, type Booking } from "@/api/bookings"
+import { CancelBookingDialog } from "./CancelBookingDialog"
 import { getVenues, type Venue } from "@/api/venues"
 import { usePagination } from "@/hooks/usePagination"
 import { useOwnerFilter, useRole } from "@/hooks/useRole"
@@ -48,7 +49,7 @@ export default function BookingsPage() {
   const [pitch_id, setPitchId]  = useState("all")
   const [reviewBookingId, setReviewBookingId] = useState<string | null>(() => searchParams.get("review"))
   const [cancelGroupId, setCancelGroupId] = useState<string | null>(null)
-  const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<Booking | null>(null)
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
   const [noShowBookingId, setNoShowBookingId] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -78,17 +79,6 @@ export default function BookingsPage() {
     // owner instead of a generic failure that doesn't say why.
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e.response?.data?.message ?? t("booking_complete_failed")),
-  })
-
-  const cancelMutation = useMutation({
-    mutationFn: (id: string) => cancelBooking(id),
-    onSuccess: () => {
-      toast.success(t("booking_cancelled_toast"))
-      queryClient.invalidateQueries({ queryKey: ["bookings"] })
-      setCancelBookingId(null)
-    },
-    onError: (e: { response?: { data?: { message?: string } } }) =>
-      toast.error(e.response?.data?.message ?? t("manual_booking_failed")),
   })
 
   const noShowMutation = useMutation({
@@ -380,7 +370,7 @@ export default function BookingsPage() {
                 size="sm"
                 variant="outline"
                 className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                onClick={() => setCancelBookingId(b.id)}
+                onClick={() => setCancelTarget(b)}
               >
                 <X className="h-3 w-3 me-1" />
                 {t("cancel")}
@@ -548,15 +538,8 @@ export default function BookingsPage() {
         isLoading={noShowMutation.isPending}
       />
 
-      <ConfirmDialog
-        title={t("cancel")}
-        description={t("cancel_booking_confirm")}
-        variant="destructive"
-        open={!!cancelBookingId}
-        onOpenChange={(open) => { if (!open) setCancelBookingId(null) }}
-        onConfirm={() => cancelBookingId && cancelMutation.mutate(cancelBookingId)}
-        isLoading={cancelMutation.isPending}
-      />
+      {/* Says what cancelling does to money already paid, per the venue's rule. */}
+      <CancelBookingDialog booking={cancelTarget} onClose={() => setCancelTarget(null)} />
 
     </div>
   )

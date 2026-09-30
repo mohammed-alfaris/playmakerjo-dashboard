@@ -1,8 +1,10 @@
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Repeat } from "lucide-react"
+import { Ban, Repeat } from "lucide-react"
 import { getBookings, type Booking } from "@/api/bookings"
 import type { PermanentBooking } from "@/api/permanentBookings"
+import type { VenueBlock } from "@/api/blocks"
+import { blockMinutesOn, blocksOnDay } from "@/lib/blocks"
 import type { Venue } from "@/api/venues"
 import { useT } from "@/i18n/LanguageContext"
 import { bookingPersonName } from "@/lib/bookingParty"
@@ -13,6 +15,7 @@ import { SCHEDULE_REFRESH_MS, addDays, toISODate, weekStartOf } from "./shared/d
 type Item =
   | { kind: "booking"; start: number; end: number; booking: Booking }
   | { kind: "standing"; start: number; end: number; standing: PermanentBooking }
+  | { kind: "block"; start: number; end: number; block: VenueBlock }
 
 /**
  * The week at a glance for one venue: seven columns, each day's bookings and standing
@@ -23,13 +26,17 @@ export function WeekView({
   venue,
   weekOf,
   permanents,
+  blocks,
   filter,
   onOpenBooking,
   onOpenDay,
+  onOpenBlock,
 }: {
   venue: Venue
   weekOf: Date
   permanents?: PermanentBooking[]
+  blocks?: VenueBlock[]
+  onOpenBlock?: (b: VenueBlock) => void
   filter: StatusGroup | "all"
   onOpenBooking: (b: Booking) => void
   onOpenDay: (d: Date) => void
@@ -75,11 +82,17 @@ export function WeekView({
           if (!recorded) items.push({ kind: "standing", start: s, end: s + p.duration, standing: p })
         }
       }
+      // Blocked time shows whatever the status filter: it is not a booking, and hiding it
+      // would make a closed evening look free.
+      for (const k of blocksOnDay(blocks, iso)) {
+        const m = blockMinutesOn(k, iso)!
+        items.push({ kind: "block", start: m.from, end: Math.min(m.to, 24 * 60), block: k })
+      }
       items.sort((a, b) => a.start - b.start)
       const live = dayBookings.filter((b) => b.status !== "cancelled").length
       return { date, iso, items, live }
     })
-  }, [data, permanents, filter, startMs])
+  }, [data, permanents, blocks, filter, startMs])
 
   const weekday = new Intl.DateTimeFormat(lang === "ar" ? "ar-JO" : "en-GB", { weekday: "short" })
   const dayNum = new Intl.DateTimeFormat(lang === "ar" ? "ar-JO" : "en-GB", { day: "numeric", month: "short" })
@@ -120,6 +133,26 @@ export function WeekView({
                 <p className="px-1 py-3 text-center text-[11px] text-[hsl(var(--ink-3))]">{t("week_free_day")}</p>
               )}
               {d.items.map((it) => {
+                if (it.kind === "block") {
+                  const k = it.block
+                  return (
+                    <button
+                      key={`k-${k.id}`}
+                      type="button"
+                      disabled={!onOpenBlock}
+                      onClick={() => onOpenBlock?.(k)}
+                      className="block w-full rounded-[8px] px-2 py-1.5 text-start text-[11.5px] disabled:cursor-default"
+                      style={{ backgroundImage: "repeating-linear-gradient(135deg, hsl(var(--rose) / 0.14) 0 6px, hsl(var(--rose) / 0.05) 6px 12px)" }}
+                    >
+                      <div className="num flex items-center gap-1 font-semibold text-[hsl(var(--rose-ink))]">
+                        <Ban className="h-3 w-3" />
+                        {fmtRange(it.start, it.end)}
+                      </div>
+                      <div className="truncate text-[hsl(var(--ink-2))]">{k.reason || t("block_label")}</div>
+                      {pitchName(k.pitchId) && <div className="truncate text-[10.5px] text-[hsl(var(--ink-3))]">{pitchName(k.pitchId)}</div>}
+                    </button>
+                  )
+                }
                 if (it.kind === "standing") {
                   const p = it.standing
                   return (

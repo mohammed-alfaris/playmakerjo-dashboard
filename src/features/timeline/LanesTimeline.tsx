@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react"
-import { Repeat } from "lucide-react"
+import { Ban, Repeat } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Chip } from "@/components/shared/design/Chip"
 import {
@@ -27,6 +27,9 @@ import { useT } from "@/i18n/LanguageContext"
 import type { Pitch, Venue } from "@/api/venues"
 import type { Booking } from "@/api/bookings"
 import type { PermanentBooking } from "@/api/permanentBookings"
+import type { VenueBlock } from "@/api/blocks"
+import { blockSpansFor } from "@/lib/blocks"
+import { toISODate } from "./shared/dateUtils"
 
 // ---------------------------------------------------------------------------
 // LanesTimeline — the "Clean" Lanes grid (ported from timeslots-clean.jsx).
@@ -65,6 +68,10 @@ export interface LanesTimelineProps {
   /** Left label column width; defaults to 180 for full, 148 for compact. */
   labelWidth?: number
   canManage?: boolean
+  /** Blocked time (maintenance, holidays): drawn across every lane it closes. */
+  blocks?: VenueBlock[]
+  /** Clicking a block — the caller offers to remove it. Omitted for read-only viewers. */
+  onOpenBlock?: (block: VenueBlock) => void
 }
 
 /** Snap unit for drag-create. The drag rectangle locks to multiples of this. */
@@ -100,6 +107,8 @@ export function LanesTimeline({
   compact,
   labelWidth,
   canManage,
+  blocks,
+  onOpenBlock,
 }: LanesTimelineProps) {
   const { t, lang } = useT()
   const pxPerMin = PX_PER_MIN
@@ -488,6 +497,21 @@ export function LanesTimeline({
                         />
                       )}
 
+                      {/* Blocked time, beneath the bookings: a booking already inside a new block
+                          stays visible and clickable, so the desk can move it. */}
+                      {blockSpansFor(blocks, pitch.id, toISODate(date)).map(({ block, from, to }) => (
+                        <BlockBand
+                          key={block.id}
+                          block={block}
+                          from={from}
+                          to={to}
+                          pxPerMin={pxPerMin}
+                          frameStart={frameStart}
+                          frameEnd={frameEnd}
+                          onOpen={onOpenBlock}
+                        />
+                      ))}
+
                       {/* Bookings and standing reservations */}
                       {row.assignments.map((a) => a.booking._perm ? (
                         <PermanentBlock
@@ -673,6 +697,53 @@ function PermanentBlock({
         <span className="truncate text-[10.5px] font-medium text-[hsl(var(--ink-2))]">
           {label || t("permanent_weekly")}
         </span>
+      </div>
+    </div>
+  )
+}
+
+/** A blocked span across the whole row: rose-hatched, with its reason. */
+function BlockBand({
+  block,
+  from,
+  to,
+  pxPerMin,
+  frameStart,
+  frameEnd,
+  onOpen,
+}: {
+  block: VenueBlock
+  from: number
+  to: number
+  pxPerMin: number
+  frameStart: number
+  frameEnd: number
+  onOpen?: (b: VenueBlock) => void
+}) {
+  const { t } = useT()
+  const visibleStart = Math.max(from, frameStart)
+  const visibleEnd = Math.min(to, frameEnd)
+  if (visibleEnd <= visibleStart) return null
+  const label = block.reason ? `${t("block_label")} · ${block.reason}` : t("block_label")
+  return (
+    <div
+      // Marked like a booking so pressing on it does not start a drag-to-book.
+      data-booking-block
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen ? () => onOpen(block) : undefined}
+      className={cn("absolute inset-y-0 overflow-hidden border-x border-[hsl(var(--rose)/0.5)]", onOpen && "cursor-pointer")}
+      style={{
+        insetInlineStart: (visibleStart - frameStart) * pxPerMin,
+        width: Math.max(2, (visibleEnd - visibleStart) * pxPerMin),
+        backgroundImage:
+          "repeating-linear-gradient(135deg, hsl(var(--rose) / 0.16) 0 6px, hsl(var(--rose) / 0.06) 6px 12px)",
+      }}
+      title={`${label} · ${fmtRange(from, to)}`}
+    >
+      <div className="flex items-center gap-1 px-1.5 pt-1">
+        <Ban className="h-3 w-3 shrink-0 text-[hsl(var(--rose-ink))]" />
+        <span className="truncate text-[10.5px] font-semibold text-[hsl(var(--rose-ink))]">{label}</span>
       </div>
     </div>
   )

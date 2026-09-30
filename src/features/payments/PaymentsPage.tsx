@@ -80,6 +80,8 @@ export default function PaymentsPage() {
     deposit: t("payment_kind_deposit"),
     balance: t("payment_kind_balance"),
     full: t("payment_kind_full"),
+    refund: t("payment_kind_refund"),
+    correction: t("payment_kind_correction"),
   }
 
   const columns: ColumnDef<Payment>[] = [

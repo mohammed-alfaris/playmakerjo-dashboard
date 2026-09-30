@@ -72,9 +72,26 @@ export default function MoneyTab({ params, print = false }: { params: ReportPara
         </ReportCard>
         <ReportCard title={t("report_what_paid_for")} hint={t("report_what_paid_for_hint")}>
           {!r ? <ChartSkeleton height={150} /> : (
-            <Donut format={money} items={r.byKind.map((k) => ({
-              key: k.key, label: t(`pay_kind_${k.key}` as TranslationKey), value: k.amount, color: KIND_COLORS[k.key],
-            }))} />
+            <>
+              {/* A donut cannot draw a negative slice: money in goes in the ring, money given
+                  back (refunds, corrections) is listed beneath it. "Collected" is already net. */}
+              <Donut format={money} items={r.byKind.filter((k) => k.amount > 0).map((k) => ({
+                key: k.key, label: t(`pay_kind_${k.key}` as TranslationKey), value: k.amount, color: KIND_COLORS[k.key],
+              }))} />
+              {r.byKind.some((k) => k.amount < 0) && (
+                <div className="mt-4 border-t pt-3 text-sm">
+                  <p className="mb-1.5 text-xs text-muted-foreground">{t("report_money_back")}</p>
+                  <ul className="space-y-1">
+                    {r.byKind.filter((k) => k.amount < 0).map((k) => (
+                      <li key={k.key} className="flex justify-between">
+                        <span>{t(`pay_kind_${k.key}` as TranslationKey)}</span>
+                        <span className="num font-semibold text-[hsl(var(--rose-ink))]">{money(k.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
           )}
         </ReportCard>
       </div>

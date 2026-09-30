@@ -1,5 +1,6 @@
+import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Loader2 } from "lucide-react"
+import { CalendarClock, Loader2, Printer, Undo2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sheet,
@@ -17,6 +18,11 @@ import { formatCurrency } from "@/lib/formatters"
 import { bookingPersonName } from "@/lib/bookingParty"
 import { markBookingPaid } from "@/api/bookings"
 import { parseHHMM, fmtRange } from "@/lib/timelineDesign"
+import { CancelBookingDialog } from "@/features/bookings/CancelBookingDialog"
+import { MoveBookingDialog } from "@/features/bookings/MoveBookingDialog"
+import { RefundDialog } from "@/features/bookings/RefundDialog"
+
+const UPCOMING = ["pending", "pending_payment", "pending_review", "confirmed"]
 
 // ---------------------------------------------------------------------------
 // BookingDrawer — right side sheet for a selected booking
@@ -72,19 +78,11 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
     },
   })
 
-  const cancel = useMutation({
-    mutationFn: () => api.patch(`/bookings/${booking.id}/cancel`),
-    onSuccess: () => {
-      toast.success(t("status_cancelled"))
-      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
-      qc.invalidateQueries({ queryKey: ["venue-slots"] })
-      qc.invalidateQueries({ queryKey: ["bookings"] })
-      onClose()
-    },
-    onError: (e: { response?: { data?: { message?: string } } }) => {
-      toast.error(e.response?.data?.message ?? t("manual_booking_failed"))
-    },
-  })
+  // Each opens over the drawer; when it has changed the booking, the drawer closes with it —
+  // what the drawer shows is the booking as it was.
+  const [dialog, setDialog] = useState<"cancel" | "move" | "refund" | null>(null)
+  const closeAll = () => { setDialog(null); onClose() }
+  const paid = booking.amountPaid ?? 0
 
   return (
     <Sheet open onOpenChange={(v) => !v && onClose()}>
@@ -164,25 +162,48 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
                 {`${t("record_payment")} (${formatCurrency(remaining)})`}
               </Button>
             )}
-            {can("bookings.manage") && ["pending", "pending_payment", "pending_review", "confirmed"].includes(
-              booking.status,
-            ) && (
+            <div className="grid grid-cols-2 gap-2">
+              {can("bookings.manage") && UPCOMING.includes(booking.status) && (
+                <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialog("move")}>
+                  <CalendarClock className="h-3.5 w-3.5" />
+                  {t("move_action")}
+                </Button>
+              )}
+              {can("payments.record") && paid > 0.0005 && (
+                <Button size="sm" variant="outline" className="gap-1" onClick={() => setDialog("refund")}>
+                  <Undo2 className="h-3.5 w-3.5" />
+                  {t("refund_action")}
+                </Button>
+              )}
+              {can("payments.view") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1"
+                  onClick={() => window.open(`/bookings/${booking.id}/receipt`, "_blank", "noopener")}
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  {t("receipt_action")}
+                </Button>
+              )}
+            </div>
+            {can("bookings.manage") && UPCOMING.includes(booking.status) && (
               <Button
                 size="sm"
                 variant="ghost"
                 className="w-full text-[hsl(var(--rose-ink))] gap-1"
-                onClick={() => cancel.mutate()}
-                disabled={cancel.isPending}
+                onClick={() => setDialog("cancel")}
               >
-                {cancel.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : null}
                 {t("cancel")}
               </Button>
             )}
           </div>
         </div>
       </SheetContent>
+
+      <CancelBookingDialog booking={dialog === "cancel" ? booking : null} onClose={() => setDialog(null)} onCancelled={closeAll} />
+      <MoveBookingDialog booking={dialog === "move" ? booking : null} onClose={() => setDialog(null)} onSaved={closeAll} />
+      <RefundDialog booking={dialog === "refund" ? booking : null} onClose={() => setDialog(null)} onSaved={closeAll} />
     </Sheet>
   )
 }

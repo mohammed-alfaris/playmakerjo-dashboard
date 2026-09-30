@@ -358,3 +358,9 @@
   /* Charts and tinted cells keep their colours on paper. */
   .report-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ── Booking receipt (/bookings/:id/receipt): half a sheet is enough ─────────── */
+@page receipt { size: A5; margin: 10mm; }
+@media print {
+  .receipt-print { page: receipt; max-width: none; padding: 0; }
+}
