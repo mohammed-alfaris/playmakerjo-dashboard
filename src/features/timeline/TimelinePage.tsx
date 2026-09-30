@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import {
+  Ban,
   Plus,
   CalendarDays,
 } from "lucide-react"
@@ -29,6 +30,9 @@ import { WeekView } from "./WeekView"
 import { NavGroup } from "./shared/NavGroup"
 import { BookingDrawer } from "./shared/BookingDrawer"
 import { AssignBookingDialog } from "./shared/AssignBookingDialog"
+import { BlockTimeDialog } from "./shared/BlockTimeDialog"
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { deleteBlock, listBlocks, type VenueBlock } from "@/api/blocks"
 
 // ---------------------------------------------------------------------------
 // TimelinePage — "Clean" Lanes variant. The data/query layer (venues, bookings,
@@ -58,6 +62,8 @@ export default function TimelinePage() {
   const [drawerBooking, setDrawerBooking] = useState<Booking | null>(null)
   const [filter, setFilter] = useState<FilterId>("all")
   const [view, setView] = useState<"day" | "week">("day")
+  const [blockOpen, setBlockOpen] = useState(false)
+  const [removingBlock, setRemovingBlock] = useState<VenueBlock | null>(null)
   const qc = useQueryClient()
 
   /**
@@ -125,6 +131,29 @@ export default function TimelinePage() {
     enabled: !!effectiveId,
     // They change rarely; refetching per date change would be pure noise.
     staleTime: 5 * 60_000,
+  })
+
+  // Blocked time for what is on screen: the day (and the night after it, which a late window
+  // reaches), or the whole week.
+  const blockFrom = view === "week" ? toISODate(weekStartOf(selectedDate)) : iso
+  const blockTo = view === "week" ? toISODate(addDays(weekStartOf(selectedDate), 6)) : toISODate(addDays(selectedDate, 1))
+  const { data: blocks } = useQuery({
+    queryKey: ["venue-blocks", effectiveId, blockFrom, blockTo],
+    queryFn: () => listBlocks(effectiveId, blockFrom, blockTo),
+    enabled: !!effectiveId,
+    refetchInterval: SCHEDULE_REFRESH_MS,
+  })
+
+  const removeBlock = useMutation({
+    mutationFn: (b: VenueBlock) => deleteBlock(b.venueId, b.id),
+    onSuccess: () => {
+      toast.success(t("block_removed"))
+      qc.invalidateQueries({ queryKey: ["venue-blocks"] })
+      qc.invalidateQueries({ queryKey: ["venue-slots"] })
+      setRemovingBlock(null)
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e.response?.data?.message ?? t("something_went_wrong")),
   })
 
   // Group counts for the filter pills
@@ -214,6 +243,18 @@ export default function TimelinePage() {
             <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
           )}
           {view === "day" && <StatPill label={t("bookings_label")} value={counts.all} />}
+          {canManage && selectedVenue && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1.5 rounded-[10px] font-semibold"
+              onClick={() => setBlockOpen(true)}
+              disabled={isPastDate}
+            >
+              <Ban className="h-3.5 w-3.5" />
+              {t("block_time")}
+            </Button>
+          )}
           {canManage && selectedVenue && (
             <Button
               size="sm"
@@ -331,6 +372,8 @@ export default function TimelinePage() {
           venue={selectedVenue}
           weekOf={selectedDate}
           permanents={permanents}
+          blocks={blocks}
+          onOpenBlock={canManage ? setRemovingBlock : undefined}
           filter={filter}
           onOpenBooking={(b) => setDrawerBooking(b)}
           onOpenDay={(d) => {
@@ -350,6 +393,8 @@ export default function TimelinePage() {
           // Only offered to someone who can take money, and never for a past day.
           onRecordStanding={can("standing.manage") && !isPastDate ? (p) => recordWeek.mutate(p) : undefined}
           date={selectedDate}
+          blocks={blocks}
+          onOpenBlock={canManage ? setRemovingBlock : undefined}
           canManage={canManage && !isPastDate}
           onCreate={(args) => {
             setDraftPreset({
@@ -391,6 +436,25 @@ export default function TimelinePage() {
         />
       )}
 
+      {blockOpen && selectedVenue && (
+        <BlockTimeDialog
+          venueId={selectedVenue.id}
+          pitches={selectedVenue.pitches ?? []}
+          date={iso}
+          onClose={() => setBlockOpen(false)}
+        />
+      )}
+
+      <ConfirmDialog
+        title={t("block_remove")}
+        description={removingBlock ? describeBlock(removingBlock) : ""}
+        open={!!removingBlock}
+        onOpenChange={(open) => { if (!open) setRemovingBlock(null) }}
+        onConfirm={() => removingBlock && removeBlock.mutate(removingBlock)}
+        isLoading={removeBlock.isPending}
+        confirmLabel={t("block_remove")}
+      />
+
       {/* Booking detail drawer */}
       {drawerBooking && (
         <BookingDrawer
@@ -407,6 +471,14 @@ export default function TimelinePage() {
       )}
     </div>
   )
+}
+
+/** "Pitch repair · 2026-09-30 11:00–13:00", or both dates when it spans days. */
+function describeBlock(b: VenueBlock) {
+  const [fd, ft] = b.startsAt.split("T")
+  const [td, tt] = b.endsAt.split("T")
+  const span = fd === td ? `${fd} ${ft}–${tt}` : `${fd} ${ft} – ${td} ${tt}`
+  return b.reason ? `${b.reason} · ${span}` : span
 }
 
 // ---------------------------------------------------------------------------

@@ -106,6 +106,9 @@ export const schema = z.object({
   longitude:    z.string().optional(),
   cliqAlias:    z.string().optional(),
   depositPercentage: z.number().optional(),
+  // Cancelling at least this many hours before the start refunds what was paid. Up to 30
+  // days, matching the API's range; 0 means cancelling is always free.
+  freeCancelHours: z.number().int().min(0).max(720).optional(),
   // Venue-level default hours — a pitch that toggles "Different hours" gets its
   // own override, otherwise it inherits these.
   venueHours:   z.array(dayHoursSchema).length(7),
@@ -243,7 +246,7 @@ export const WIZARD_STEPS: WizardStep[] = [
   { key: "basics",  label: "wizard_step_basics",  fields: ["name", "ownerId", "city", "address", "description"] },
   { key: "pitches", label: "wizard_step_pitches", fields: ["pitches"] },
   { key: "hours",   label: "wizard_step_hours",   fields: ["venueHours"] },
-  { key: "payment", label: "wizard_step_payment", fields: ["cliqAlias", "depositPercentage"] },
+  { key: "payment", label: "wizard_step_payment", fields: ["cliqAlias", "depositPercentage", "freeCancelHours"] },
   // Features live in local state like images, not the schema — FeaturesStep enforces the
   // limits as the owner adds, so there is nothing for the resolver to validate here.
   { key: "features", label: "wizard_step_features", fields: [] },

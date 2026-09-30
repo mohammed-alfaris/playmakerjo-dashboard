@@ -51,6 +51,8 @@ export interface Venue {
   minBookingDuration?: number
   maxBookingDuration?: number
   depositPercentage?: number
+  /** Cancelling at least this many hours before the start refunds what was paid. */
+  freeCancelHours?: number
   // Subdividable pitch (optional; null/empty = legacy single-size venue)
   parentSize?: string | null       // "5" | "6" | "7" | "8" | "11"
   subSizes?: string[]              // e.g. ["8","6"] or ["7","5"]

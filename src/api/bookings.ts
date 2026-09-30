@@ -9,6 +9,8 @@ export interface Booking {
     images?: string[]
     /** The venue's real CliQ alias. Sent by the API as `cliqAlias`. */
     cliqAlias?: string | null
+    /** Cancelling at least this many hours before the start refunds what was paid. */
+    freeCancelHours?: number
   }
   player: { id: string; name: string }
   /**
@@ -88,10 +90,83 @@ export async function cancelSeries(groupId: string) {
   return res.data
 }
 
+/**
+ * What a cancellation does to money already paid:
+ *  - "policy": the venue's free-cancellation window decides (refund before it, keep inside it)
+ *  - "all":    refund everything anyway
+ *  - "none":   keep everything
+ * Anything but "policy" needs payments.record; a clerk without it cancels and the money stays.
+ */
+export type RefundChoice = "policy" | "all" | "none"
+
 /** Cancels a single booking — the plain per-row action, distinct from cancelSeries. */
-export async function cancelBooking(id: string) {
-  const res = await api.patch(`/bookings/${id}/cancel`)
+export async function cancelBooking(id: string, refund: RefundChoice = "policy") {
+  const res = await api.patch(`/bookings/${id}/cancel`, { refund })
+  return { booking: res.data.data as Booking, message: res.data.message as string }
+}
+
+/** Money going back: a refund to the customer, or a correction of a payment recorded by mistake. */
+export async function refundBooking(id: string, payload: { amount: number; kind: "refund" | "correction"; note?: string }) {
+  const res = await api.post(`/bookings/${id}/refund`, payload)
   return res.data.data as Booking
+}
+
+export interface UpdateBookingPayload {
+  date?: string
+  startTime?: string
+  duration?: number
+  pitchId?: string
+  pitchSize?: string
+  /** A price agreed with the customer. Needs payments.record. Left out, the list price applies. */
+  totalAmount?: number
+  notes?: string
+}
+
+/**
+ * Moves or re-prices a booking. The new slot passes the same checks as a new booking, so a
+ * refusal comes back as a 400/409 with a message worth showing as it is.
+ */
+export async function updateBooking(id: string, payload: UpdateBookingPayload) {
+  const res = await api.patch(`/bookings/${id}`, payload)
+  return { booking: res.data.data as Booking, message: res.data.message as string }
+}
+
+export interface ReceiptLine {
+  date: string
+  /** Negative for a refund or correction. */
+  amount: number
+  method?: string | null
+  kind?: "deposit" | "balance" | "full" | "refund" | "correction" | string | null
+  note?: string | null
+}
+
+export interface BookingReceipt {
+  receiptNumber: string
+  issuedAt: string
+  companyName?: string | null
+  companyNameAr?: string | null
+  venueName: string
+  venueNameAr?: string | null
+  venueAddress?: string | null
+  venueCity?: string | null
+  customerName?: string | null
+  customerPhone?: string | null
+  sport: string
+  pitchName?: string | null
+  pitchSize?: string | null
+  date: string
+  startTime?: string | null
+  duration: number
+  status: Booking["status"]
+  totalAmount: number
+  amountPaid: number
+  balance: number
+  payments: ReceiptLine[]
+}
+
+export async function getReceipt(id: string) {
+  const res = await api.get(`/bookings/${id}/receipt`)
+  return res.data.data as BookingReceipt
 }
 
 export async function reviewProof(id: string, payload: { approved: boolean; note?: string }) {

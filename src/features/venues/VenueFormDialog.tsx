@@ -107,13 +107,14 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
             longitude:    venue.longitude?.toString() ?? "",
             cliqAlias:    venue.cliqAlias ?? "",
             depositPercentage: venue.depositPercentage ?? 20,
+            freeCancelHours: venue.freeCancelHours ?? 24,
             venueHours:   hoursFromOperating(venue.operatingHours),
             pitches:      seededPitches,
           }
         : {
             name: "", ownerId: isOwner && userId ? userId : "", city: "", address: "",
             description: "",
-            latitude: "", longitude: "", cliqAlias: "", depositPercentage: 20,
+            latitude: "", longitude: "", cliqAlias: "", depositPercentage: 20, freeCancelHours: 24,
             venueHours: hoursFromOperating(undefined),
             pitches: seededPitches,
           }
@@ -221,6 +222,7 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
         longitude: values.longitude ? parseFloat(values.longitude) : undefined,
         cliqAlias: values.cliqAlias || undefined,
         depositPercentage: values.depositPercentage,
+        freeCancelHours: values.freeCancelHours,
         operatingHours: venueOperatingHours,
         parentSize: legacySplit.parentSize,
         subSizes:   legacySplit.subSizes,
@@ -503,6 +505,21 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
                     placeholder="20"
                     {...register("depositPercentage", { valueAsNumber: true })}
                   />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="freeCancelHours">{t("free_cancel_hours")}</Label>
+                  <Input
+                    id="freeCancelHours"
+                    type="number"
+                    min={0}
+                    max={720}
+                    step={1}
+                    placeholder="24"
+                    className="w-32"
+                    {...register("freeCancelHours", { setValueAs: (v) => (v === "" || v == null ? undefined : Number(v)) })}
+                  />
+                  <p className="text-xs text-muted-foreground">{t("free_cancel_hours_hint")}</p>
+                  {errors.freeCancelHours && <p className="text-xs text-destructive">{errors.freeCancelHours.message}</p>}
                 </div>
               </div>
             )}
