@@ -85,7 +85,9 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
   const hasProofImage =
     !!booking?.paymentProof && booking.paymentProof !== "(uploaded)"
 
-  const isPending = booking?.paymentProofStatus === "pending_review"
+  // The booking must still be waiting too: an old cancelled booking can carry a proof that
+  // still says "pending_review", and the server refuses to approve it (it used to revive it).
+  const isPending = booking?.paymentProofStatus === "pending_review" && booking?.status === "pending_review"
 
   const locale = lang === "ar" ? "ar-JO" : "en-GB"
   const submittedLabel = booking
