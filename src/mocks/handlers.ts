@@ -460,6 +460,30 @@ const staffHandlers = [
   }),
 ]
 
+// ─── Inbox (the signed-in user's own notifications) ───────────────────────────
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString()
+let inbox = [
+  { id: "n1", title: "New booking|حجز جديد", body: "Faisal Al-Zoubi booked Al-Ameen Football Arena for tonight 20:00.|فيصل الزعبي حجز ملعب الأمين الليلة 20:00.", type: "new_booking", referenceId: "b10", isRead: false, createdAt: minutesAgo(4) },
+  { id: "n2", title: "Payment Proof Received|تم استلام إثبات الدفع", body: "A payment proof has been uploaded by Nour Khalil.|تم رفع إثبات دفع من قبل نور خليل.", type: "proof_received", referenceId: "b8", isRead: false, createdAt: minutesAgo(38) },
+  { id: "n3", title: "Booking Cancelled|تم إلغاء الحجز", body: "Hassan Khatib cancelled his booking.|حسن الخطيب ألغى حجزه.", type: "booking_cancelled", referenceId: "b4", isRead: true, createdAt: minutesAgo(60 * 26) },
+]
+
+const inboxHandlers = [
+  http.get(`${BASE}/notifications`, async () => {
+    await delay(150)
+    return ok({ notifications: inbox, unreadCount: inbox.filter((n) => !n.isRead).length })
+  }),
+  http.get(`${BASE}/notifications/unread-count`, async () => ok({ unreadCount: inbox.filter((n) => !n.isRead).length })),
+  http.patch(`${BASE}/notifications/:id/read`, async ({ params }) => {
+    inbox = inbox.map((n) => (n.id === params.id ? { ...n, isRead: true } : n))
+    return ok(null, "Marked as read")
+  }),
+  http.post(`${BASE}/notifications/read-all`, async () => {
+    inbox = inbox.map((n) => ({ ...n, isRead: true }))
+    return ok(null, "All marked as read")
+  }),
+]
+
 // ─── Business reports ─────────────────────────────────────────────────────────
 // The seeded bookings are all from March 2025, so a real computation over "this month" would
 // show an empty report. These handlers instead generate steady, repeatable demo numbers for
@@ -1235,6 +1259,7 @@ export const handlers = [
   ...staffHandlers,
   ...companyHandlers,
   ...reportHandlers2,
+  ...inboxHandlers,
   ...customerHandlers,
   ...bookingHandlers,
   ...paymentHandlers,

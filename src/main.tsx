@@ -6,6 +6,7 @@ import "./index.css"
 import { router } from "./router"
 import { LanguageProvider } from "./i18n/LanguageContext"
 import { ErrorBoundary } from "./components/shared/ErrorBoundary"
+import { restoreSession } from "./api/axios"
 
 // Recover from "Failed to fetch dynamically imported module" after a deploy.
 //
@@ -68,7 +69,13 @@ async function prepare() {
   if (import.meta.env.VITE_MOCK_API === "true") {
     const { worker } = await import("./mocks/browser")
     await worker.start({ onUnhandledRequest: "bypass" })
+    // The mock's /auth/refresh always succeeds, so restoring would make the login page
+    // unreachable in mock mode.
+    return
   }
+  // Restore a session from the refresh cookie before the first render, so a new tab opens
+  // straight onto the dashboard. Capped, so a slow API never holds up the login page.
+  await Promise.race([restoreSession(), new Promise((resolve) => setTimeout(resolve, 4000))])
 }
 
 prepare().then(() => {

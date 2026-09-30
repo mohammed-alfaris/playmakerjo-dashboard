@@ -72,3 +72,32 @@ export async function deleteTemplate(id: string) {
   const res = await api.delete(`/notifications/templates/${id}`)
   return res.data
 }
+
+// ─── The signed-in user's own inbox ──────────────────────────────────────────
+
+export interface InboxItem {
+  id: string
+  /** Stored bilingual as "English|Arabic"; see lib/inbox.ts `localized`. */
+  title: string
+  body: string
+  type: string
+  /** A booking id for booking events, a lead id for venue_lead. */
+  referenceId: string | null
+  isRead: boolean
+  createdAt: string
+}
+
+export async function getInbox(limit = 20): Promise<{ items: InboxItem[]; unreadCount: number }> {
+  const res = await api.get<{ data: { notifications: InboxItem[]; unreadCount: number } }>("/notifications", {
+    params: { page: 1, limit },
+  })
+  return { items: res.data.data.notifications, unreadCount: res.data.data.unreadCount }
+}
+
+export async function markInboxItemRead(id: string): Promise<void> {
+  await api.patch(`/notifications/${id}/read`)
+}
+
+export async function markInboxAllRead(): Promise<void> {
+  await api.post("/notifications/read-all")
+}
