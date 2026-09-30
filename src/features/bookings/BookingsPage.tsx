@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom"
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
@@ -6,6 +7,7 @@ import { toast } from "sonner"
 import { ProofReviewDialog } from "./ProofReviewDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { DataTable } from "@/components/shared/DataTable"
+import { SCHEDULE_REFRESH_MS } from "@/features/timeline/shared/dateUtils"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,12 +37,16 @@ export default function BookingsPage() {
   const ownerFilter = useOwnerFilter()
   const { t, lang } = useT()
 
-  const [status,   setStatus]   = useState("all")
-  const [from,     setFrom]     = useState("")
-  const [to,       setTo]       = useState("")
-  const [venue_id, setVenueId]  = useState("all")
+  // Links land here with filters — the timeline's "view" (?venue&from&to), the inbox
+  // (?review=<booking> opens that proof). This page used to ignore its URL entirely, so
+  // those links showed the unfiltered list. Read once, as the starting state.
+  const [searchParams] = useSearchParams()
+  const [status,   setStatus]   = useState(() => searchParams.get("status") ?? "all")
+  const [from,     setFrom]     = useState(() => searchParams.get("from") ?? "")
+  const [to,       setTo]       = useState(() => searchParams.get("to") ?? "")
+  const [venue_id, setVenueId]  = useState(() => searchParams.get("venue") ?? "all")
   const [pitch_id, setPitchId]  = useState("all")
-  const [reviewBookingId, setReviewBookingId] = useState<string | null>(null)
+  const [reviewBookingId, setReviewBookingId] = useState<string | null>(() => searchParams.get("review"))
   const [cancelGroupId, setCancelGroupId] = useState<string | null>(null)
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null)
   const [completeBookingId, setCompleteBookingId] = useState<string | null>(null)
@@ -111,6 +117,8 @@ export default function BookingsPage() {
       pitch_id: pitch_id === "all" ? undefined : pitch_id,
       ...ownerFilter,
     }),
+    // Same as the timeline: new app bookings and proofs appear without a manual refresh.
+    refetchInterval: SCHEDULE_REFRESH_MS,
   })
 
   const { data: venuesData } = useQuery({

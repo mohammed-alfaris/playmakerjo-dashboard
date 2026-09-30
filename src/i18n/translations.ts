@@ -948,6 +948,16 @@ export const translations = {
     company_name_not_saved: "The account was created, but the company name wasn't saved. Rename it from Companies.",
     company_staff_full: "This company is at its limit of {max} team members. Raise it from Companies first.",
     account_type: "Account type",
+    view_day: "Day",
+    view_week: "Week",
+    week_open_day: "Open this day",
+    week_free_day: "Nothing booked",
+    week_standing: "Weekly reservation",
+    inbox_title: "Notifications",
+    inbox_mark_all: "Mark all read",
+    inbox_empty: "You're all caught up",
+    inbox_booking_gone: "That booking can't be opened any more",
+    inbox_broadcast_console: "Send notifications to users",
   },
   ar: {
     // Nav
@@ -1893,6 +1903,16 @@ export const translations = {
     company_name_not_saved: "انعمل الحساب، بس اسم الشركة ما انحفظ. غيّره من الشركات.",
     company_staff_full: "هالشركة وصلت الحد الأقصى ({max}) من الموظفين. ارفعه من الشركات أولاً.",
     account_type: "نوع الحساب",
+    view_day: "يوم",
+    view_week: "أسبوع",
+    week_open_day: "افتح هذا اليوم",
+    week_free_day: "ما في حجوزات",
+    week_standing: "حجز أسبوعي ثابت",
+    inbox_title: "الإشعارات",
+    inbox_mark_all: "تعليم الكل كمقروء",
+    inbox_empty: "ما في إشعارات جديدة",
+    inbox_booking_gone: "ما عاد في مجال نفتح هالحجز",
+    inbox_broadcast_console: "إرسال إشعارات للمستخدمين",
   },
 } as const
 

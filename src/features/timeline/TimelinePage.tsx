@@ -24,7 +24,8 @@ import {
   type StatusGroup,
 } from "@/lib/timelineDesign"
 
-import { toISODate, addDays } from "./shared/dateUtils"
+import { toISODate, addDays, weekStartOf, SCHEDULE_REFRESH_MS } from "./shared/dateUtils"
+import { WeekView } from "./WeekView"
 import { NavGroup } from "./shared/NavGroup"
 import { BookingDrawer } from "./shared/BookingDrawer"
 import { AssignBookingDialog } from "./shared/AssignBookingDialog"
@@ -56,6 +57,7 @@ export default function TimelinePage() {
   } | null>(null)
   const [drawerBooking, setDrawerBooking] = useState<Booking | null>(null)
   const [filter, setFilter] = useState<FilterId>("all")
+  const [view, setView] = useState<"day" | "week">("day")
   const qc = useQueryClient()
 
   /**
@@ -102,6 +104,9 @@ export default function TimelinePage() {
     queryFn: () =>
       getBookings({ venue_id: effectiveId, from: iso, to: iso, page: 1, limit: 100 }),
     enabled: !!effectiveId,
+    // The desk keeps this screen open all day: pick up bookings made in the app or at the
+    // other desk without anyone pressing refresh. Paused while the tab is in the background.
+    refetchInterval: SCHEDULE_REFRESH_MS,
   })
   const bookings: Booking[] = useMemo(
     () => bookingsData?.data ?? [],
@@ -162,14 +167,17 @@ export default function TimelinePage() {
 
   const locale = lang === "ar" ? "ar-JO" : "en-GB"
   const displayDate = new Date(iso + "T00:00:00")
-  const dateLabel = displayDate.toLocaleDateString(locale, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  })
+  const weekStart = weekStartOf(selectedDate)
+  const dateLabel = view === "week"
+    ? `${weekStart.toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${addDays(weekStart, 6).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" })}`
+    : displayDate.toLocaleDateString(locale, {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      })
 
   function goDay(delta: number) {
-    setSelectedDate((d) => addDays(d, delta))
+    setSelectedDate((d) => addDays(d, view === "week" ? delta * 7 : delta))
   }
 
   const filterPills: Array<{ id: FilterId; label: string; color?: keyof typeof GROUP_META }> = [
@@ -193,7 +201,7 @@ export default function TimelinePage() {
               onPrev={() => goDay(-1)}
               onToday={() => setSelectedDate(new Date())}
               onNext={() => goDay(1)}
-              isToday={isToday}
+              isToday={view === "week" ? toISODate(weekStart) === toISODate(weekStartOf(now)) : isToday}
               todayLabel={t("today")}
             />
           </div>
@@ -201,10 +209,11 @@ export default function TimelinePage() {
         <div className="flex items-center gap-2.5">
           {/* Staff run the schedule; what it earns is for those allowed to see reports.
               Taking bookings is about slots, not money. */}
-          {can("reports.view") && (
+          {/* The pills describe one day; in the week view each column carries its own count. */}
+          {view === "day" && can("reports.view") && (
             <StatPill label={t("revenue_label")} value={formatCurrency(revenue)} />
           )}
-          <StatPill label={t("bookings_label")} value={counts.all} />
+          {view === "day" && <StatPill label={t("bookings_label")} value={counts.all} />}
           {canManage && selectedVenue && (
             <Button
               size="sm"
@@ -294,17 +303,17 @@ export default function TimelinePage() {
           })}
         </div>
         <Segmented
-          value="day"
-          onChange={() => {}}
+          value={view}
+          onChange={setView}
           options={[
-            { value: "day", label: lang === "ar" ? "يوم" : "Day" },
-            { value: "week", label: lang === "ar" ? "أسبوع" : "Week", disabled: true, title: "Coming soon" },
+            { value: "day", label: t("view_day") },
+            { value: "week", label: t("view_week") },
           ]}
         />
       </div>
 
       {/* Loading */}
-      {(venuesLoading || bookingsLoading) && (
+      {(venuesLoading || (view === "day" && bookingsLoading)) && (
         <div className="h-[320px] w-full rounded-[16px] bg-[hsl(var(--surface-2))] animate-pulse" />
       )}
 
@@ -317,7 +326,21 @@ export default function TimelinePage() {
       )}
 
       {/* Lanes timeline */}
-      {!venuesLoading && !bookingsLoading && selectedVenue && (
+      {view === "week" && !venuesLoading && selectedVenue && (
+        <WeekView
+          venue={selectedVenue}
+          weekOf={selectedDate}
+          permanents={permanents}
+          filter={filter}
+          onOpenBooking={(b) => setDrawerBooking(b)}
+          onOpenDay={(d) => {
+            setSelectedDate(d)
+            setView("day")
+          }}
+        />
+      )}
+
+      {view === "day" && !venuesLoading && !bookingsLoading && selectedVenue && (
         <LanesTimeline
           venue={selectedVenue}
           bookings={visibleBookings}

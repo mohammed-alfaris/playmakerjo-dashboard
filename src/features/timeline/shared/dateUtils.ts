@@ -12,3 +12,16 @@ export function addDays(d: Date, n: number): Date {
   nd.setDate(nd.getDate() + n)
   return nd
 }
+
+/** Sunday of the week containing `d` — the working week starts Sunday, as elsewhere in the app. */
+export function weekStartOf(d: Date): Date {
+  const s = new Date(d)
+  s.setHours(0, 0, 0, 0)
+  return addDays(s, -s.getDay())
+}
+
+/**
+ * How often the schedule re-reads itself while it is on screen. Two clerks at two desks,
+ * or an app booking arriving: without it the lanes stayed as they were at page load.
+ */
+export const SCHEDULE_REFRESH_MS = 30_000

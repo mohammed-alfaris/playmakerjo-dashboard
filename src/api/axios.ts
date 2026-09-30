@@ -1,5 +1,6 @@
 import axios from "axios"
 import { useAuthStore } from "@/store/authStore"
+import type { AuthUser } from "./auth"
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -98,5 +99,32 @@ api.interceptors.response.use(
     }
   }
 )
+
+/**
+ * Pick the session back up from the 7-day refresh cookie when this tab has none.
+ *
+ * The signed-in user lives in sessionStorage, which belongs to one tab: every new tab, and
+ * every browser restart, used to mean logging in again — at a desk that opens the dashboard
+ * all day long. The server has kept a 7-day refresh cookie all along; this simply uses it.
+ * Logging out deletes the cookie, so after a logout this finds nothing and the login page shows.
+ *
+ * Goes through refreshClient, never `api`: a 401 here is the normal "no session" answer and
+ * must not trigger the interceptor's refresh-and-redirect.
+ */
+export async function restoreSession(): Promise<boolean> {
+  const store = useAuthStore.getState()
+  if (store.isAuthenticated) return true
+  try {
+    const res = await refreshClient.post<{ data: { accessToken: string } }>("/auth/refresh")
+    const token = res.data.data.accessToken
+    const me = await refreshClient.get<{ data: AuthUser }>("/users/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    store.login(me.data.data, token)
+    return true
+  } catch {
+    return false
+  }
+}
 
 export default api
