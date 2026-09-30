@@ -22,6 +22,7 @@ export type InboxTarget =
 /** Where tapping a notification takes you. */
 export function targetOf(item: Pick<InboxItem, "type" | "referenceId">): InboxTarget {
   if (item.type === "venue_lead") return { kind: "route", path: "/leads" }
+  if (item.type === "invoice_issued") return { kind: "route", path: "/billing" }
   if (!item.referenceId) return { kind: "none" }
   if (item.type === "proof_received") return { kind: "proof", bookingId: item.referenceId }
   if (item.type.startsWith("booking_") || item.type === "new_booking" || item.type === "new_series" || item.type === "no_show")

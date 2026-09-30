@@ -10,6 +10,7 @@ import { getSummary, getRevenueChart, getTopVenues, getSportsBreakdown } from "@
 import { getBookings } from "@/api/bookings"
 import { useAuth } from "@/hooks/useAuth"
 import { useRole, useOwnerFilter } from "@/hooks/useRole"
+import { OnboardingCard } from "./OnboardingCard"
 import { formatCurrency } from "@/lib/formatters"
 import { bookingPersonName } from "@/lib/bookingParty"
 import { useT } from "@/i18n/LanguageContext"
@@ -45,6 +46,9 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-5">
+      {/* New owners see what is left to set up, until it is all done. */}
+      {isOwner && <OnboardingCard />}
+
       {/* Greeting strip */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>

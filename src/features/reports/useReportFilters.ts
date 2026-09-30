@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 import type { ReportParams } from "@/api/reports"
+import { useViewAsStore } from "@/store/viewAsStore"
 import { readFilters, writeFilters, type ReportFilters } from "./reportLogic"
 
 /**
@@ -10,6 +11,7 @@ import { readFilters, writeFilters, type ReportFilters } from "./reportLogic"
 export function useReportFilters() {
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => readFilters(searchParams), [searchParams])
+  const viewAs = useViewAsStore((s) => s.companyId)
 
   const update = useCallback(
     (patch: Partial<ReportFilters>) => setSearchParams(writeFilters({ ...filters, ...patch }), { replace: true }),
@@ -20,9 +22,10 @@ export function useReportFilters() {
     from: filters.from,
     to: filters.to,
     venue_id: filters.venue || undefined,
-    owner_id: filters.company || undefined,
+    // An admin viewing as a company reports on that company unless they picked another.
+    owner_id: filters.company || viewAs || undefined,
     compare: filters.compare,
-  }), [filters])
+  }), [filters, viewAs])
 
   return { filters, update, params, searchParams }
 }

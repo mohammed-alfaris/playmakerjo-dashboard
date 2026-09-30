@@ -1,5 +1,6 @@
 import api from "./axios"
 import type { Usage } from "@/lib/permissions"
+import type { CompanyBilling } from "./billing"
 
 /** A venue owner's account, seen as a company: who owns it, what it uses, what it may. */
 export interface Company {
@@ -13,6 +14,8 @@ export interface Company {
   venues: Usage
   staff: Usage
   createdAt: string
+  /** Trial, prices, what is overdue, whether PlayMaker has suspended it. */
+  billing: CompanyBilling
 }
 
 export interface CompanyLimits {

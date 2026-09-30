@@ -13,6 +13,7 @@ import {
   mockStaffRoles,
 } from "./data"
 import type { Booking, RefundChoice } from "@/api/bookings"
+import { billingOf, businessHandlers } from "./businessHandlers"
 import { cancelPreview, refundFor } from "@/lib/cancellation"
 
 const BASE = import.meta.env.VITE_API_URL as string
@@ -759,6 +760,7 @@ function companyDto(ownerId: string) {
     ownerStatus: owner.status,
     ...companyUsage(ownerId),
     createdAt: owner.createdAt,
+    billing: billingOf(ownerId),
   }
 }
 
@@ -1408,6 +1410,7 @@ export const handlers = [
   ...userHandlers,
   ...staffHandlers,
   ...companyHandlers,
+  ...businessHandlers,
   ...reportHandlers2,
   ...inboxHandlers,
   ...customerHandlers,
