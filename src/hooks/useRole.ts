@@ -1,5 +1,6 @@
 import { useCallback } from "react"
 import { useAuthStore } from "@/store/authStore"
+import { useViewAsStore } from "@/store/viewAsStore"
 import { legacyPermissions, type Permission } from "@/lib/permissions"
 
 export function useRole() {
@@ -40,7 +41,8 @@ export function useRole() {
 }
 
 /**
- * Returns { owner_id: userId } for a venue_owner, {} otherwise.
+ * Returns { owner_id: userId } for a venue_owner, the viewed company for an admin using
+ * "View as company", {} otherwise.
  *
  * IMPORTANT: this is no longer a security boundary and must not be treated as one.
  * The API now derives scope from the JWT and deliberately IGNORES a client-supplied
@@ -53,6 +55,10 @@ export function useRole() {
  * queryFn: () => getVenues({ page, limit, ...ownerFilter })
  */
 export function useOwnerFilter(): { owner_id?: string } {
-  const { isOwner, userId } = useRole()
-  return isOwner && userId ? { owner_id: userId } : {}
+  const { isOwner, isAdmin, userId } = useRole()
+  // An admin viewing as a company sees that company's scope, exactly as its owner would.
+  const viewAs = useViewAsStore((s) => s.companyId)
+  if (isOwner && userId) return { owner_id: userId }
+  if (isAdmin && viewAs) return { owner_id: viewAs }
+  return {}
 }

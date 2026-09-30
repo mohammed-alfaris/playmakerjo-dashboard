@@ -32,6 +32,8 @@ export interface AccessSummary {
   /** True for owners, admins, and staff not limited to particular venues. */
   allVenues: boolean
   venueIds: string[]
+  /** PlayMaker has suspended the company: no back office until it is lifted. */
+  companySuspended?: boolean
 }
 
 export interface LoginResponse {

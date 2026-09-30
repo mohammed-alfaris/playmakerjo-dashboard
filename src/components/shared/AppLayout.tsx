@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Outlet } from "react-router-dom"
+import { Outlet, useLocation } from "react-router-dom"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
@@ -11,9 +11,18 @@ import { QuickActionFab } from "./QuickActionFab"
 import { AnnouncementsBanner } from "./AnnouncementsBanner"
 import { AttendancePrompt } from "./AttendancePrompt"
 import { CommandPalette } from "./CommandPalette"
+import { AccountBanners } from "./AccountBanners"
+import { SuspendedNotice } from "./SuspendedNotice"
+import { useAuthStore } from "@/store/authStore"
+
+/** Pages a suspended company can still open: its bill and its own profile. */
+const OPEN_WHILE_SUSPENDED = ["/billing", "/profile"]
 
 export default function AppLayout() {
   const { collapsed, toggle } = useSidebar()
+  const suspended = useAuthStore((s) => s.user?.access?.companySuspended ?? false)
+  const { pathname } = useLocation()
+  const blocked = suspended && !OPEN_WHILE_SUSPENDED.some((p) => pathname.startsWith(p))
   useSessionRefresh()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isDark, setIsDark] = useState<boolean>(() => {
@@ -58,12 +67,13 @@ export default function AppLayout() {
           />
 
           <AnnouncementsBanner />
+          <AccountBanners />
           {/* Sits above every page on purpose: yesterday's unanswered slots should be the
               first thing seen, whichever screen the owner or clerk opens. */}
           <AttendancePrompt />
 
           <main className="flex-1 overflow-y-auto p-6">
-            <Outlet />
+            {blocked ? <SuspendedNotice /> : <Outlet />}
           </main>
         </div>
 

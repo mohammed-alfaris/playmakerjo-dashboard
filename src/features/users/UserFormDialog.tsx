@@ -43,9 +43,21 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
+/** Fields to start from — a sales lead becoming an owner arrives already filled in. */
+export interface UserFormInitial {
+  name?: string
+  email?: string
+  phone?: string
+  role?: string
+  companyName?: string
+}
+
 interface Props {
   open: boolean
   onOpenChange: (v: boolean) => void
+  initial?: UserFormInitial
+  /** Called with the new account's id once it exists. */
+  onCreated?: (userId: string) => void
 }
 
 /**
@@ -55,7 +67,7 @@ interface Props {
  *   - an owner IS a company — name it (it would otherwise take the owner's name);
  *   - players and admins belong to none.
  */
-export function UserFormDialog({ open, onOpenChange }: Props) {
+export function UserFormDialog({ open, onOpenChange, initial, onCreated }: Props) {
   const { t } = useT()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -64,13 +76,13 @@ export function UserFormDialog({ open, onOpenChange }: Props) {
           <DialogTitle>{t("create_user")}</DialogTitle>
         </DialogHeader>
         {/* Content unmounts on close, so every open starts from a blank form. */}
-        <UserForm onDone={() => onOpenChange(false)} />
+        <UserForm initial={initial} onCreated={onCreated} onDone={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   )
 }
 
-function UserForm({ onDone }: { onDone: () => void }) {
+function UserForm({ onDone, initial, onCreated }: { onDone: () => void; initial?: UserFormInitial; onCreated?: (userId: string) => void }) {
   const queryClient = useQueryClient()
   const { t, lang } = useT()
 
@@ -82,7 +94,7 @@ function UserForm({ onDone }: { onDone: () => void }) {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { role: "player" },
+    defaultValues: { role: "player", ...initial },
   })
 
   const role = watch("role")
@@ -140,7 +152,8 @@ function UserForm({ onDone }: { onDone: () => void }) {
       }
       return res
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
+      onCreated?.(res.data.id)
       toast.success(t("user_created"))
       queryClient.invalidateQueries({ queryKey: ["users"] })
       queryClient.invalidateQueries({ queryKey: ["companies"] })

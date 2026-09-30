@@ -8,7 +8,17 @@ export interface PlatformSettings {
   /** Copied onto each new company when it is created; null = unlimited. */
   defaultMaxVenues: number | null
   defaultMaxStaff: number | null
+  /** What a company without its own prices pays, and the terms every company gets. */
+  billing: BillingDefaults
   updatedAt: string
+}
+
+export interface BillingDefaults {
+  priceFirstVenue: number
+  priceExtraVenue: number
+  setupFee: number
+  trialDays: number
+  paymentTermsDays: number
 }
 
 export interface UpdateSettingsRequest {
@@ -18,6 +28,8 @@ export interface UpdateSettingsRequest {
   maintenanceMessageAr?: string
   /** Sets both defaults at once; null in either = unlimited. */
   defaultLimits?: { maxVenues: number | null; maxStaff: number | null }
+  /** Sets every billing default at once. */
+  billing?: BillingDefaults
 }
 
 export async function getSettings(): Promise<{ data: PlatformSettings }> {

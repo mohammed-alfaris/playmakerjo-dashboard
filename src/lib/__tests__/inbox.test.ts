@@ -16,6 +16,9 @@ describe("localized", () => {
 })
 
 describe("targetOf", () => {
+  it("sends a new PlayMaker invoice to the billing page", () => {
+    expect(targetOf(item({ type: "invoice_issued", referenceId: "inv_1" }))).toEqual({ kind: "route", path: "/billing" })
+  })
   it("opens the booking, the proof, or the leads page", () => {
     expect(targetOf({ type: "new_booking", referenceId: "bk1" })).toEqual({ kind: "booking", bookingId: "bk1" })
     expect(targetOf({ type: "booking_cancelled", referenceId: "bk2" })).toEqual({ kind: "booking", bookingId: "bk2" })

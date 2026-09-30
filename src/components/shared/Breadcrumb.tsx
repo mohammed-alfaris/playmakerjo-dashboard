@@ -10,6 +10,9 @@ const ROUTE_LABELS: Record<string, TranslationKey> = {
   "/bookings":      "nav_bookings",
   "/users":         "nav_users",
   "/companies":     "nav_companies",
+  "/billing":       "nav_billing",
+  "/activity":      "nav_activity",
+  "/leads":         "nav_leads",
   "/staff":         "nav_staff",
   "/customers":     "nav_customers",
   "/timeline":      "slot_timeline",
@@ -19,6 +22,8 @@ const ROUTE_LABELS: Record<string, TranslationKey> = {
   "/notifications": "nav_notifications",
   "/venue-features": "nav_venue_features",
   "/profile":       "nav_profile",
+  "/settings":      "nav_settings",
+  "/map":           "nav_map",
 }
 
 export function Breadcrumb({ className }: { className?: string }) {

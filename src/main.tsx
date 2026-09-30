@@ -1,6 +1,7 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { RouterProvider } from "react-router-dom"
+import { useAuthStore } from "@/store/authStore"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import "./index.css"
 import { router } from "./router"
@@ -63,6 +64,20 @@ const queryClient = new QueryClient({
       retry: 1,
     },
   },
+})
+
+// A different person on this tab must never see the last person's data. Cached lists are
+// keyed by what was asked, not always by who asked, so after a sign-out and a sign-in as
+// someone else (a shared computer at the desk) the next user was shown the previous one's
+// schedule and prompts until each query happened to refetch. Clear the cache whenever the
+// signed-in user changes.
+let cacheOwner = useAuthStore.getState().user?.id ?? null
+useAuthStore.subscribe((state) => {
+  const id = state.user?.id ?? null
+  if (id !== cacheOwner) {
+    cacheOwner = id
+    queryClient.clear()
+  }
 })
 
 async function prepare() {

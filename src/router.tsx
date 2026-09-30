@@ -29,6 +29,9 @@ const CustomerDetailPage = lazy(() => import("@/features/customers/CustomerDetai
 const CompaniesPage = lazy(() => import("@/features/companies/CompaniesPage"))
 const ReportPrintPage = lazy(() => import("@/features/reports/ReportPrintPage"))
 const ReceiptPage = lazy(() => import("@/features/bookings/ReceiptPage"))
+const InvoicePrintPage = lazy(() => import("@/features/billing/InvoicePrintPage"))
+const BillingPage = lazy(() => import("@/features/billing/BillingPage"))
+const ActivityPage = lazy(() => import("@/features/activity/ActivityPage"))
 
 function PageLoader() {
   return (
@@ -69,6 +72,13 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function OwnerRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
   if (user?.role !== "venue_owner") return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+/** Billing and the activity log: the owner's own and the admin's; never staff. */
+function OwnerOrAdminRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  if (user?.role !== "venue_owner" && user?.role !== "super_admin") return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -122,6 +132,16 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
   },
+  // PlayMaker's invoice to a company, outside the shell for printing. The API decides who may
+  // read it (the admin, or that company's owner).
+  {
+    path: "/invoices/:id/print",
+    element: (
+      <ProtectedRoute>
+        <LazyPage><InvoicePrintPage /></LazyPage>
+      </ProtectedRoute>
+    ),
+  },
   // A receipt for the counter, also outside the shell: only the receipt reaches the paper.
   {
     path: "/bookings/:id/receipt",
@@ -163,6 +183,9 @@ export const router = createBrowserRouter([
       { path: "settings",   element: <AdminRoute><LazyPage><SettingsPage /></LazyPage></AdminRoute> },
       { path: "venue-features", element: <AdminRoute><LazyPage><VenueFeaturesPage /></LazyPage></AdminRoute> },
       { path: "profile",    element: <LazyPage><ProfilePage /></LazyPage> },
+      // Admin runs billing; the owner reads their own. Staff have no bill.
+      { path: "billing",    element: <OwnerOrAdminRoute><LazyPage><BillingPage /></LazyPage></OwnerOrAdminRoute> },
+      { path: "activity",   element: <OwnerOrAdminRoute><LazyPage><ActivityPage /></LazyPage></OwnerOrAdminRoute> },
       { path: "*",          element: <Navigate to="/" replace /> },
     ],
   },

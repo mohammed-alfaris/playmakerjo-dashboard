@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
 import type { AuthUser } from "@/api/auth"
+import { useViewAsStore } from "./viewAsStore"
 
 interface AuthState {
   user: AuthUser | null
@@ -20,8 +21,11 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       login: (user, token) =>
         set({ user, accessToken: token, isAuthenticated: true }),
-      logout: () =>
-        set({ user: null, accessToken: null, isAuthenticated: false }),
+      logout: () => {
+        // An admin's "view as company" belongs to their session, not to whoever signs in next.
+        useViewAsStore.getState().exit()
+        set({ user: null, accessToken: null, isAuthenticated: false })
+      },
       setToken: (token) => set({ accessToken: token }),
       updateUser: (patch) =>
         set((state) => ({ user: state.user ? { ...state.user, ...patch } : null })),

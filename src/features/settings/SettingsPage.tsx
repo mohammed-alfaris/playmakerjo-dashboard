@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/LanguageContext"
 import { getSettings, updateSettings, type PlatformSettings } from "@/api/settings"
+import { BillingDefaultsCard } from "./BillingDefaultsCard"
 import { parseLimit } from "@/lib/permissions"
 
 const limitText = (n: number | null | undefined) => (n == null ? "" : String(n))
@@ -446,6 +447,9 @@ export default function SettingsPage() {
             </div>
             <p className="mt-3 text-xs text-muted-foreground">{t("limit_empty_unlimited")}</p>
           </section>
+
+          {/* Card: Billing defaults (its own Save) */}
+          <BillingDefaultsCard />
 
           {/* Card: Maintenance mode */}
           <section className="rounded-2xl border border-border bg-card p-5">

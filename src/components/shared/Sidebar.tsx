@@ -16,6 +16,8 @@ import {
   Settings as SettingsIcon,
   Sparkles,
   Building2,
+  Receipt,
+  History,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -63,6 +65,8 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
       // "who on my staff recorded it", which is the venue's question, not the platform's.
       { href: "/payments",      labelKey: "nav_payments",      icon: CreditCard,  roles: ["super_admin", "venue_owner", "venue_staff"], permission: "payments.view" },
       { href: "/reports",       labelKey: "nav_reports",       icon: BarChart3,   roles: ["super_admin", "venue_owner", "venue_staff"], permission: "reports.view" },
+      { href: "/activity",      labelKey: "nav_activity",      icon: History,     roles: ["super_admin", "venue_owner"] },
+      { href: "/billing",       labelKey: "nav_billing",       icon: Receipt,     roles: ["super_admin", "venue_owner"] },
       { href: "/reviews",       labelKey: "reviews",           icon: Star,        roles: ["super_admin"] },
       { href: "/venue-features", labelKey: "nav_venue_features", icon: Sparkles, roles: ["super_admin"] },
       { href: "/notifications", labelKey: "nav_notifications", icon: Bell,        roles: ["super_admin"] },
