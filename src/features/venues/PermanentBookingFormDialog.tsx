@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import CustomerPhoneField from "@/features/customers/CustomerPhoneField"
 import {
   Select,
   SelectContent,
@@ -57,6 +58,7 @@ export function PermanentBookingFormDialog({ venue, open, onOpenChange, onCreate
   const [startTime, setStartTime] = useState<string>("21:00")
   const [duration, setDuration] = useState<number>(60)
   const [label, setLabel] = useState<string>("")
+  const [customer, setCustomer] = useState<{ phone: string; name: string }>({ phone: "", name: "" })
 
   // Reset form when dialog re-opens.
   useEffect(() => {
@@ -121,6 +123,8 @@ export function PermanentBookingFormDialog({ venue, open, onOpenChange, onCreate
       startTime,
       duration,
       label: label.trim() || null,
+      customerPhone: customer.phone.trim() || null,
+      customerName: customer.name.trim() || null,
     })
   }
 
@@ -229,6 +233,13 @@ export function PermanentBookingFormDialog({ venue, open, onOpenChange, onCreate
               ))}
             </div>
           </div>
+
+          {/* The organiser.
+              Standing groups are roughly 40% of a pitch's bookings and, until now, not one
+              of their organisers existed in the customer book — the owner's most valuable
+              relationships were the only ones he had no record of. Same phone-first capture
+              as a counter booking, and just as optional. */}
+          <CustomerPhoneField value={customer} onChange={setCustomer} />
 
           {/* Label */}
           <div className="space-y-1.5">

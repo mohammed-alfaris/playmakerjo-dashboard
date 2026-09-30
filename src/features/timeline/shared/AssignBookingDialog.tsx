@@ -11,10 +11,13 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import api from "@/api/axios"
+import CustomerPhoneField, { type CustomerDraft } from "@/features/customers/CustomerPhoneField"
 import type { Pitch } from "@/api/venues"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
-import { parseHHMM, fmt12, hoursFor } from "@/lib/timelineDesign"
+import { parseHHMM, fmt12, hoursFor, slotFitsCapacity } from "@/lib/timelineDesign"
+import type { PermanentBooking } from "@/api/permanentBookings"
+import type { Booking } from "@/api/bookings"
 import type { OperatingHours } from "@/lib/types"
 
 // ---------------------------------------------------------------------------
@@ -40,6 +43,13 @@ export interface AssignBookingDialogProps {
   maxDuration?: number
   /** Venue-level operating hours; pitch overrides are checked first. */
   operatingHours?: OperatingHours
+  /**
+   * What is already on the schedule for this day, so the time dropdown can stop offering
+   * slots that are visibly taken. Passed down rather than re-fetched: it is the exact data
+   * the user is looking at behind the dialog, so the two cannot disagree.
+   */
+  dayBookings?: Booking[]
+  dayPermanents?: PermanentBooking[]
   onClose: () => void
 }
 
@@ -54,12 +64,18 @@ export function AssignBookingDialog({
   minDuration,
   maxDuration,
   operatingHours,
+  dayBookings,
+  dayPermanents,
   onClose,
 }: AssignBookingDialogProps) {
   const { t } = useT()
   const qc = useQueryClient()
   const [sport, setSport] = useState<string>(preset?.sport ?? sports?.[0] ?? "football")
-  const [playerName, setPlayerName] = useState("")
+  // Replaces the old free-text `playerName`. That field wrote the customer's name into the
+  // notes string as "[MANUAL] [sport] Walk-in: خالد." — unsearchable, phone-less, and
+  // invisible to every other screen.
+  const [customer, setCustomer] = useState<CustomerDraft>({ phone: "", name: "" })
+  const [customerPaid, setCustomerPaid] = useState(true)
   const [notes, setNotes] = useState("")
 
   const durationOptions = useMemo(() => {
@@ -119,6 +135,31 @@ export function AssignBookingDialog({
 
   // 30-min slot list within the day's open/close window. Latest start is
   // `close - duration` so the booking always fits before close.
+  // Everything already holding part of THIS pitch today: real bookings plus any standing
+  // weekly reservation that falls on this weekday.
+  const occupants = useMemo(() => {
+    if (!selectedPitch) return []
+    const dow = bookingDate?.getDay()
+    const fromBookings = (dayBookings ?? [])
+      .filter((b) => b.status !== "cancelled")
+      .filter((b) => (b.pitchId ? b.pitchId === selectedPitch.id
+                                : b.sport?.toLowerCase() === selectedPitch.sport.toLowerCase()))
+      .map((b) => ({ startMin: parseHHMM(b.startTime ?? "00:00"), duration: b.duration, pitchSize: b.pitchSize }))
+    const fromPermanents = (dayPermanents ?? [])
+      .filter((p) => p.status === "active" && p.dayOfWeek === dow)
+      .filter((p) => (p.pitchId ? p.pitchId === selectedPitch.id
+                                : p.sport?.toLowerCase() === selectedPitch.sport.toLowerCase()))
+      .map((p) => ({ startMin: parseHHMM(p.startTime), duration: p.duration, pitchSize: p.pitchSize }))
+    return [...fromBookings, ...fromPermanents]
+  }, [dayBookings, dayPermanents, selectedPitch, bookingDate])
+
+  // 30-min slot list within the day's open/close window. Latest start is
+  // `close - duration` so the booking always fits before close.
+  //
+  // Now also drops anything the pitch has no room for. It used to offer every half hour the
+  // venue was open regardless of what was booked, so a clerk could pick a taken time, fill
+  // in the customer's name and phone, hit save, and only then be told no — with the customer
+  // still on the line. The schedule behind the dialog was showing the conflict the whole time.
   const startOptions = useMemo(() => {
     if (!dayHours) return []
     const open = parseHHMM(dayHours.open)
@@ -126,9 +167,13 @@ export function AssignBookingDialog({
     if (close <= open) close += 24 * 60 // overnight (e.g. open 18:00, close 02:00)
     const last = close - duration
     const out: number[] = []
-    for (let m = open; m <= last; m += 30) out.push(m)
+    for (let m = open; m <= last; m += 30) {
+      if (!selectedPitch || slotFitsCapacity(selectedPitch, occupants, m, duration, pitchSize)) {
+        out.push(m)
+      }
+    }
     return out
-  }, [dayHours, duration])
+  }, [dayHours, duration, selectedPitch, occupants, pitchSize])
 
   // Snap startMin to a valid 30-min slot whenever the available slots change
   // (date, pitch, or duration changed). Avoids leaving the select on a value
@@ -158,8 +203,11 @@ export function AssignBookingDialog({
       const normalized = ((startMin % (24 * 60)) + 24 * 60) % (24 * 60)
       const startHH = String(Math.floor(normalized / 60)).padStart(2, "0")
       const startMM = String(normalized % 60).padStart(2, "0")
+      // The "[MANUAL] [sport]" prefix stays for now: historical rows carry it and the
+      // read-side parser still uses it to recover names from bookings taken before customer
+      // records existed. The "Walk-in: {name}." fragment is gone — that identity now lives
+      // in a real column instead of inside a string.
       const notePrefix = `[MANUAL] [${sport}]`
-      const walkIn = playerName ? ` Walk-in: ${playerName}.` : ""
       const extra = notes ? ` ${notes}` : ""
       const pitchIdToSend =
         pitchId && !pitchId.startsWith("legacy-") ? pitchId : undefined
@@ -170,8 +218,11 @@ export function AssignBookingDialog({
         startTime: `${startHH}:${startMM}`,
         duration,
         paymentMethod: "cliq",
-        notes: `${notePrefix}${walkIn}${extra}`.trim(),
+        notes: `${notePrefix}${extra}`.trim(),
         isManual: true,
+        customerPhone: customer.phone.trim() || undefined,
+        customerName: customer.name.trim() || undefined,
+        customerPaid,
         ...(pitchSize ? { pitchSize } : {}),
         ...(pitchIdToSend ? { pitchId: pitchIdToSend } : {}),
       })
@@ -202,6 +253,10 @@ export function AssignBookingDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {/* First thing in the dialog, because it is the first thing asked on the phone —
+              and because knowing who this is has to happen BEFORE the slot is given away. */}
+          <CustomerPhoneField value={customer} onChange={setCustomer} autoFocus />
+
           <div className="grid grid-cols-2 gap-3">
             <Field label={t("start_time")}>
               {hasOperatingHours ? (
@@ -316,14 +371,27 @@ export function AssignBookingDialog({
             </Field>
           )}
 
-          <Field label={t("player_name")}>
-            <input
-              type="text"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              placeholder={t("player_name_placeholder")}
-              className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] placeholder:text-[hsl(var(--ink-3))] focus:border-[hsl(var(--brand))] focus:outline-none"
-            />
+          {/* A booking taken over the phone on Sunday for Tuesday is held, not paid. The
+              system used to record every manual booking as settled in full the instant it
+              was created, which hid the most expensive kind of no-show there is. */}
+          <Field label={t("payment_status")}>
+            <div className="grid grid-cols-2 gap-2">
+              {[true, false].map((paid) => (
+                <button
+                  key={String(paid)}
+                  type="button"
+                  onClick={() => setCustomerPaid(paid)}
+                  className={
+                    "rounded-md border px-2 py-1.5 text-xs font-medium transition-colors " +
+                    (customerPaid === paid
+                      ? "border-[hsl(var(--brand))] bg-brand-tint text-brand-ink"
+                      : "border-[hsl(var(--line))] text-[hsl(var(--ink-3))] hover:bg-surface-2")
+                  }
+                >
+                  {paid ? t("paid_now") : t("pays_on_arrival")}
+                </button>
+              ))}
+            </div>
           </Field>
 
           <Field label={t("notes")}>

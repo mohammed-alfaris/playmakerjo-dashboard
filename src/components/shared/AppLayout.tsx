@@ -4,14 +4,17 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/hooks/useSidebar"
+import { useSessionRefresh } from "@/hooks/useSessionRefresh"
 import { Sidebar } from "./Sidebar"
 import { TopHeader } from "./TopHeader"
 import { QuickActionFab } from "./QuickActionFab"
 import { AnnouncementsBanner } from "./AnnouncementsBanner"
+import { AttendancePrompt } from "./AttendancePrompt"
 import { CommandPalette } from "./CommandPalette"
 
 export default function AppLayout() {
   const { collapsed, toggle } = useSidebar()
+  useSessionRefresh()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isDark, setIsDark] = useState<boolean>(() => {
     const stored = typeof window !== "undefined" ? window.localStorage.getItem("theme") : null
@@ -55,6 +58,9 @@ export default function AppLayout() {
           />
 
           <AnnouncementsBanner />
+          {/* Sits above every page on purpose: yesterday's unanswered slots should be the
+              first thing seen, whichever screen the owner or clerk opens. */}
+          <AttendancePrompt />
 
           <main className="flex-1 overflow-y-auto p-6">
             <Outlet />

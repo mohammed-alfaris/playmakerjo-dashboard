@@ -230,7 +230,7 @@ export function newPitchValues(defaultSport: string, defaultPrice: number): Pitc
 /*  Wizard step definitions                                        */
 /* ────────────────────────────────────────────────────────────── */
 
-export type WizardStepKey = "basics" | "pitches" | "hours" | "payment" | "media"
+export type WizardStepKey = "basics" | "pitches" | "hours" | "payment" | "features" | "media"
 
 export interface WizardStep {
   key: WizardStepKey
@@ -244,5 +244,9 @@ export const WIZARD_STEPS: WizardStep[] = [
   { key: "pitches", label: "wizard_step_pitches", fields: ["pitches"] },
   { key: "hours",   label: "wizard_step_hours",   fields: ["venueHours"] },
   { key: "payment", label: "wizard_step_payment", fields: ["cliqAlias", "depositPercentage"] },
+  // Features live in local state like images, not the schema — FeaturesStep enforces the
+  // limits as the owner adds, so there is nothing for the resolver to validate here.
+  { key: "features", label: "wizard_step_features", fields: [] },
+  // Media must stay last: the submit button only appears on the final step.
   { key: "media",   label: "wizard_step_media",   fields: ["latitude", "longitude"] },
 ]

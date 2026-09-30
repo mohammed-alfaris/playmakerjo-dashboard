@@ -9,10 +9,15 @@ const ROUTE_LABELS: Record<string, TranslationKey> = {
   "/venues":        "nav_venues",
   "/bookings":      "nav_bookings",
   "/users":         "nav_users",
+  "/companies":     "nav_companies",
+  "/staff":         "nav_staff",
+  "/customers":     "nav_customers",
+  "/timeline":      "slot_timeline",
   "/payments":      "nav_payments",
   "/reports":       "nav_reports",
   "/reviews":       "reviews",
   "/notifications": "nav_notifications",
+  "/venue-features": "nav_venue_features",
   "/profile":       "nav_profile",
 }
 

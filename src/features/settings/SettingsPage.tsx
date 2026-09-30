@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Wrench,
   RefreshCw,
+  Building2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,6 +19,9 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { useT } from "@/i18n/LanguageContext"
 import { getSettings, updateSettings, type PlatformSettings } from "@/api/settings"
+import { parseLimit } from "@/lib/permissions"
+
+const limitText = (n: number | null | undefined) => (n == null ? "" : String(n))
 
 /* ─────────────────────────────────────────────────────────────────────────
    Helpers
@@ -208,6 +212,8 @@ export default function SettingsPage() {
   const [maintenanceMode, setMaintenanceMode] = useState(false)
   const [msgEn, setMsgEn] = useState("")
   const [msgAr, setMsgAr] = useState("")
+  const [defVenues, setDefVenues] = useState("")
+  const [defStaff, setDefStaff] = useState("")
   const [previewLang, setPreviewLang] = useState<"en" | "ar">(lang)
 
   useEffect(() => {
@@ -216,11 +222,20 @@ export default function SettingsPage() {
     setMaintenanceMode(settings.maintenanceMode)
     setMsgEn(settings.maintenanceMessageEn)
     setMsgAr(settings.maintenanceMessageAr)
+    setDefVenues(limitText(settings.defaultMaxVenues))
+    setDefStaff(limitText(settings.defaultMaxStaff))
   }, [settings])
 
   useEffect(() => {
     setPreviewLang(lang)
   }, [lang])
+
+  const defMaxVenues = parseLimit(defVenues)
+  const defMaxStaff = parseLimit(defStaff)
+  const limitsValid = defMaxVenues !== "invalid" && defMaxStaff !== "invalid"
+  const limitsDirty =
+    !!settings &&
+    (defVenues.trim() !== limitText(settings.defaultMaxVenues) || defStaff.trim() !== limitText(settings.defaultMaxStaff))
 
   // Dirty check so "Save" button is a real action
   const isDirty = useMemo(() => {
@@ -230,9 +245,10 @@ export default function SettingsPage() {
       (!isNaN(feeNum) && feeNum !== settings.platformFeePercentage) ||
       maintenanceMode !== settings.maintenanceMode ||
       msgEn !== settings.maintenanceMessageEn ||
-      msgAr !== settings.maintenanceMessageAr
+      msgAr !== settings.maintenanceMessageAr ||
+      limitsDirty
     )
-  }, [settings, fee, maintenanceMode, msgEn, msgAr])
+  }, [settings, fee, maintenanceMode, msgEn, msgAr, limitsDirty])
 
   const feeNum = parseFloat(fee)
   const feeValid = !isNaN(feeNum) && feeNum >= 0 && feeNum <= 100
@@ -244,6 +260,11 @@ export default function SettingsPage() {
         maintenanceMode,
         maintenanceMessageEn: msgEn,
         maintenanceMessageAr: msgAr,
+        // Only when changed: the object sets both defaults, and an untouched form should
+        // not rewrite them.
+        defaultLimits: limitsDirty && limitsValid
+          ? { maxVenues: defMaxVenues as number | null, maxStaff: defMaxStaff as number | null }
+          : undefined,
       }),
     onSuccess: (res) => {
       toast.success(res.message || t("settings_saved"))
@@ -391,6 +412,41 @@ export default function SettingsPage() {
             </div>
           </section>
 
+          {/* Card: Default company limits */}
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <header className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Building2 className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold">{t("default_limits")}</h2>
+                <p className="text-xs text-muted-foreground">{t("default_limits_hint")}</p>
+              </div>
+            </header>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {([
+                ["def-venues", t("limit_max_venues"), defVenues, setDefVenues, defMaxVenues],
+                ["def-staff", t("limit_max_staff"), defStaff, setDefStaff, defMaxStaff],
+              ] as const).map(([id, label, value, set, parsed]) => (
+                <div key={id} className="space-y-2">
+                  <Label htmlFor={id}>{label}</Label>
+                  <Input
+                    id={id}
+                    inputMode="numeric"
+                    dir="ltr"
+                    placeholder={t("unlimited")}
+                    value={value}
+                    onChange={(e) => set(e.target.value)}
+                    disabled={isLoading}
+                  />
+                  {parsed === "invalid" && <p className="text-xs text-rose-500">{t("limit_invalid")}</p>}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">{t("limit_empty_unlimited")}</p>
+          </section>
+
           {/* Card: Maintenance mode */}
           <section className="rounded-2xl border border-border bg-card p-5">
             <header className="flex items-center gap-3">
@@ -462,7 +518,7 @@ export default function SettingsPage() {
               {isDirty ? t("unsaved_changes") : t("all_changes_saved")}
             </p>
             <Button
-              disabled={!isDirty || !feeValid || saveMutation.isPending}
+              disabled={!isDirty || !feeValid || !limitsValid || saveMutation.isPending}
               onClick={() => saveMutation.mutate()}
             >
               {saveMutation.isPending ? (

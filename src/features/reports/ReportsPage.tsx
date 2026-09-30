@@ -1,199 +1,100 @@
-import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { Download, Loader2, DollarSign, CalendarCheck, MapPin, Percent, TrendingUp } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
+import { BarChart3, CalendarCheck, Clock, FileSpreadsheet, Loader2, Printer, Users, Wallet } from "lucide-react"
+import { downloadReportExcel } from "@/api/reports"
 import { PageHeader } from "@/components/shared/PageHeader"
-import { StatCard } from "@/components/shared/StatCard"
+import { Tabs } from "@/components/shared/design/Tabs"
 import { Button } from "@/components/ui/button"
-import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from "@/components/ui/select"
-import { getSummary, exportReport } from "@/api/reports"
-import { getVenues } from "@/api/venues"
-import { useRole, useOwnerFilter } from "@/hooks/useRole"
-import { formatCurrency } from "@/lib/formatters"
 import { useT } from "@/i18n/LanguageContext"
+import type { TranslationKey } from "@/i18n/translations"
+import { FilterBar } from "./FilterBar"
+import { writeFilters, type ReportTab } from "./reportLogic"
+import { useReportFilters } from "./useReportFilters"
+import { useVisibleTabs } from "./useVisibleTabs"
+import BookingsTab from "./tabs/BookingsTab"
+import BusyHoursTab from "./tabs/BusyHoursTab"
+import CustomersTab from "./tabs/CustomersTab"
+import MoneyTab from "./tabs/MoneyTab"
+import PlatformTab from "./tabs/PlatformTab"
 
-const DATE_INPUT_CLASS =
-  "flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm " +
-  "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground"
-
-function todayStr() {
-  return new Date().toISOString().split("T")[0]
-}
-
-function thirtyDaysAgoStr() {
-  const d = new Date()
-  d.setDate(d.getDate() - 30)
-  return d.toISOString().split("T")[0]
+const TAB_ICONS: Record<ReportTab, React.ElementType> = {
+  platform: BarChart3, money: Wallet, busy: Clock, bookings: CalendarCheck, customers: Users,
 }
 
 export default function ReportsPage() {
-  const { isAdmin } = useRole()
-  const ownerFilter = useOwnerFilter()
-  const { t } = useT()
+  const { t, lang } = useT()
+  const navigate = useNavigate()
+  const { filters, update, params, searchParams } = useReportFilters()
+  const tabs = useVisibleTabs(filters.company)
+  const tab = filters.tab && tabs.includes(filters.tab) ? filters.tab : tabs[0]
+  const [exporting, setExporting] = useState(false)
 
-  const [from,     setFrom]    = useState(thirtyDaysAgoStr)
-  const [to,       setTo]      = useState(todayStr)
-  const [venue_id, setVenueId] = useState("all")
-  const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null)
-
-  const { data: summaryData, isLoading: summaryLoading } = useQuery({
-    queryKey: ["reports-summary", ownerFilter],
-    queryFn: () => getSummary(ownerFilter),
-  })
-  const summary = summaryData?.data
-
-  const { data: venuesData } = useQuery({
-    queryKey: ["venues-for-reports", ownerFilter],
-    queryFn: () => getVenues({ limit: 100, ...ownerFilter }),
-  })
-  const venueOptions = venuesData?.data ?? []
-
-  async function handleExport(format: "csv" | "pdf") {
-    setExporting(format)
+  async function exportExcel() {
+    setExporting(true)
     try {
-      const blob = await exportReport({
-        format,
-        from:     from     || undefined,
-        to:       to       || undefined,
-        venue_id: venue_id !== "all" ? venue_id : undefined,
-      })
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement("a")
-      a.href     = url
-      a.download = `report-${from}-${to}.${format}`
+      const blob = await downloadReportExcel(params, lang === "ar" ? "ar" : "en")
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `playmaker-report-${filters.from}-${filters.to}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
-      toast.success(`${format.toUpperCase()} exported successfully`)
     } catch {
       toast.error(t("export_failed"))
     } finally {
-      setExporting(null)
+      setExporting(false)
     }
   }
 
+  // "Export report" in the command palette and the + button land here with ?export=1.
+  const exportRequested = useRef(searchParams.get("export") === "1")
+  useEffect(() => {
+    if (!exportRequested.current) return
+    exportRequested.current = false
+    update({})
+    void exportExcel()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title={t("reports")}
-        subtitle={t("export_review")}
+        subtitle={t("report_subtitle")}
+        action={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={exportExcel} disabled={exporting}>
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileSpreadsheet className="h-3.5 w-3.5" />}
+              {t("report_excel")}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5"
+              onClick={() => navigate(`/reports/print?${writeFilters({ ...filters, tab }).toString()}`)}>
+              <Printer className="h-3.5 w-3.5" />
+              {t("report_print")}
+            </Button>
+          </div>
+        }
       />
 
-      {/* Filter + Export bar */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <input
-          type="date"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-          className={DATE_INPUT_CLASS}
-          title={t("from_date")}
-        />
-        <span className="text-sm text-muted-foreground">→</span>
-        <input
-          type="date"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className={DATE_INPUT_CLASS}
-          title={t("to_date")}
-        />
+      <FilterBar filters={filters} update={update} />
 
-        <Select value={venue_id} onValueChange={setVenueId}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder={t("all_venues")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("all_venues")}</SelectItem>
-            {venueOptions.map((v: { id: string; name: string }) => (
-              <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <Tabs<ReportTab>
+        tabs={tabs.map((id) => {
+          const Icon = TAB_ICONS[id]
+          return { id, label: t(`report_tab_${id}` as TranslationKey), icon: <Icon className="h-3.5 w-3.5" /> }
+        })}
+        active={tab}
+        onChange={(id) => update({ tab: id })}
+      />
 
-        <div className="flex gap-2 ml-auto">
-          <Button
-            variant="outline"
-            onClick={() => handleExport("csv")}
-            disabled={exporting !== null}
-          >
-            {exporting === "csv"
-              ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              : <Download className="mr-2 h-4 w-4" />
-            }
-            {t("export_csv")}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => handleExport("pdf")}
-            disabled={exporting !== null}
-          >
-            {exporting === "pdf"
-              ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              : <Download className="mr-2 h-4 w-4" />
-            }
-            {t("export_pdf")}
-          </Button>
-        </div>
-      </div>
-
-      {/* Summary stat cards */}
-      {isAdmin ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            title={t("gross_revenue")}
-            value={summary ? formatCurrency(summary.totalRevenue) : "—"}
-            icon={DollarSign}
-            color="green"
-            isLoading={summaryLoading}
-          />
-          <StatCard
-            title={t("platform_revenue")}
-            value={summary ? formatCurrency(summary.systemRevenue) : "—"}
-            icon={Percent}
-            color="amber"
-            isLoading={summaryLoading}
-          />
-          <StatCard
-            title={t("total_bookings")}
-            value={summary?.totalBookings ?? "—"}
-            icon={CalendarCheck}
-            color="blue"
-            isLoading={summaryLoading}
-          />
-          <StatCard
-            title={t("owner_payouts")}
-            value={summary ? formatCurrency(summary.ownerRevenue) : "—"}
-            icon={TrendingUp}
-            color="purple"
-            isLoading={summaryLoading}
-          />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard
-            title={t("my_revenue")}
-            value={summary ? formatCurrency(summary.totalRevenue) : "—"}
-            icon={DollarSign}
-            color="green"
-            isLoading={summaryLoading}
-          />
-          <StatCard
-            title={t("my_bookings")}
-            value={summary?.totalBookings ?? "—"}
-            icon={CalendarCheck}
-            color="blue"
-            isLoading={summaryLoading}
-          />
-          <StatCard
-            title={t("my_venues")}
-            value={summary?.totalVenues ?? "—"}
-            icon={MapPin}
-            color="purple"
-            isLoading={summaryLoading}
-          />
-        </div>
+      {tab === "platform" && (
+        <PlatformTab params={params} onOpenCompany={(ownerId) => update({ company: ownerId, venue: "", tab: "money" })} />
       )}
+      {tab === "money" && <MoneyTab params={params} />}
+      {tab === "busy" && <BusyHoursTab params={params} />}
+      {tab === "bookings" && <BookingsTab params={params} />}
+      {tab === "customers" && <CustomersTab params={params} />}
     </div>
   )
 }

@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { UserFormDialog } from "./UserFormDialog"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { Search, ShieldOff, ShieldCheck, Camera, Users, X, UserPlus } from "lucide-react"
+import { Search, ShieldOff, ShieldCheck, Camera, Users, X, UserPlus, KeyRound } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
 import { DataTable } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
+import { ResetPasswordFlow } from "@/components/shared/ResetPasswordFlow"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -44,6 +45,7 @@ export default function UsersPage() {
   const [search, setSearch]             = useState("")
   const [role, setRole]                 = useState("all")
   const [status, setStatus]             = useState("all")
+  const [resetTarget, setResetTarget]   = useState<User | null>(null)
   const [banTarget, setBanTarget]       = useState<User | null>(null)
   const [roleChangeTarget, setRoleChangeTarget] = useState<{ user: User; newRole: string } | null>(null)
   const [createOpen, setCreateOpen]     = useState(false)
@@ -244,9 +246,23 @@ export default function UsersPage() {
         const isSelf   = u.id === userId
         const isBanned = u.status === "banned"
 
+        // Self stays excluded: an admin resets their OWN password from the profile screen,
+        // which requires the current one. Minting yourself a new password from the user
+        // directory would route around that check.
         if (isSelf) return <span className="text-xs text-muted-foreground">—</span>
 
-        return isBanned ? (
+        return (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setResetTarget(u)}
+            >
+              <KeyRound className="mr-1 h-3 w-3" />
+              {t("reset_password")}
+            </Button>
+            {isBanned ? (
           <Button
             variant="ghost"
             size="sm"
@@ -267,6 +283,8 @@ export default function UsersPage() {
             <ShieldOff className="mr-1 h-3 w-3" />
             {t("ban")}
           </Button>
+            )}
+          </div>
         )
       },
     },
@@ -352,6 +370,11 @@ export default function UsersPage() {
         isLoading={isLoading}
         emptyMessage={t("no_users")}
         emptyIcon={Users}
+      />
+
+      <ResetPasswordFlow
+        target={resetTarget}
+        onOpenChange={(open) => { if (!open) setResetTarget(null) }}
       />
 
       <ConfirmDialog

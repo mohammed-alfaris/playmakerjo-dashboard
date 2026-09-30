@@ -346,3 +346,15 @@
 }
 .leaflet-bar a:hover { background: hsl(var(--surface-2)) !important; }
 
+
+/* ── Reports print view (/reports/print) ───────────────────────────────────── */
+@media print {
+  @page { size: A4; margin: 12mm; }
+  html, body { background: #fff !important; }
+  .no-print { display: none !important; }
+  .print-break { break-before: page; }
+  .report-print { max-width: none; padding: 0; }
+  .report-print .break-inside-avoid { break-inside: avoid; }
+  /* Charts and tinted cells keep their colours on paper. */
+  .report-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

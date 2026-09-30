@@ -36,6 +36,8 @@ interface DataTableProps<T> {
   emptyMessage?: string
   emptyIcon?: React.ElementType
   emptyAction?: React.ReactNode
+  /** Makes rows clickable — used to open a detail sheet. */
+  onRowClick?: (row: T) => void
 }
 
 export function DataTable<T>({
@@ -47,6 +49,7 @@ export function DataTable<T>({
   emptyMessage,
   emptyIcon: EmptyIcon,
   emptyAction,
+  onRowClick,
 }: DataTableProps<T>) {
   const { t } = useT()
   const { page, limit, total } = pagination
@@ -137,7 +140,14 @@ export function DataTable<T>({
               </TableRow>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="transition-colors hover:bg-muted/30">
+                <TableRow
+                  key={row.id}
+                  onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                  className={
+                    "transition-colors hover:bg-muted/30" +
+                    (onRowClick ? " cursor-pointer" : "")
+                  }
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

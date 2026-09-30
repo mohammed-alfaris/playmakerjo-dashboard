@@ -5,6 +5,8 @@ import { type ColumnDef } from "@tanstack/react-table"
 import { Plus, Pencil, Trash2, Search, MapPin as MapPinIcon, X, CheckCircle, XCircle, Power, PowerOff } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/shared/PageHeader"
+import { LimitedAddButton } from "@/components/shared/LimitedAddButton"
+import { useMyCompany } from "@/hooks/useMyCompany"
 import { DataTable } from "@/components/shared/DataTable"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog"
@@ -44,6 +46,7 @@ export default function VenuesPage() {
   const { page, limit, setPage, resetPage } = usePagination()
   const { isAdmin } = useRole()
   const ownerFilter = useOwnerFilter()
+  const company = useMyCompany()
   const { t, lang } = useT()
 
   const [searchInput, setSearchInput] = useState("")
@@ -87,6 +90,7 @@ export default function VenuesPage() {
     onSuccess: () => {
       toast.success(t("venue_deleted"))
       queryClient.invalidateQueries({ queryKey: ["venues"] })
+      queryClient.invalidateQueries({ queryKey: ["company"] })
       setDeleteTarget(null)
     },
     onError: () => toast.error(t("venue_delete_failed")),
@@ -248,10 +252,17 @@ export default function VenuesPage() {
         title={t("venues")}
         subtitle={t("manage_venues")}
         action={
-          <Button onClick={() => { setEditVenue(null); setFormOpen(true) }}>
-            <Plus className="mr-2 h-4 w-4" />
+          // Owners see how many of their allowed venues they use; at the limit the button
+          // explains itself instead of opening a form the server would refuse.
+          <LimitedAddButton
+            usage={company?.venues}
+            usageLabel={t("usage_venues")}
+            limitMessage={t("limit_reached_venues")}
+            onClick={() => { setEditVenue(null); setFormOpen(true) }}
+          >
+            <Plus className="me-2 h-4 w-4" />
             {t("add_venue")}
-          </Button>
+          </LimitedAddButton>
         }
       />
 

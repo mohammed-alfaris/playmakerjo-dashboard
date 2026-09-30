@@ -6,27 +6,34 @@ import { cn } from "@/lib/utils"
 import { useRole } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
 import type { TranslationKey } from "@/i18n/translations"
+import type { Permission } from "@/lib/permissions"
 
 interface Action {
   labelKey: TranslationKey
   icon: React.ElementType
   onClick: () => void
   adminOnly?: boolean
+  /** Shown to venue_staff only when their role grants this; without it, never. */
+  staffPermission?: Permission
 }
 
 export function QuickActionFab() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
-  const { isAdmin } = useRole()
+  const { isAdmin, isStaff, can } = useRole()
   const { t } = useT()
 
   const actions: Action[] = [
     { labelKey: "add_venue",              icon: Building2, onClick: () => navigate("/venues?new=1") },
     { labelKey: "add_user",               icon: UserPlus,  onClick: () => navigate("/users?new=1"),       adminOnly: true },
     { labelKey: "broadcast_announcement", icon: Megaphone, onClick: () => navigate("/notifications?new=1"), adminOnly: true },
-    { labelKey: "export_report",          icon: FileDown,  onClick: () => navigate("/reports?export=1") },
+    { labelKey: "export_report",          icon: FileDown,  onClick: () => navigate("/reports?export=1"), staffPermission: "reports.view" },
   ]
-  const visible = actions.filter((a) => !a.adminOnly || isAdmin)
+  const visible = actions.filter((a) =>
+    isStaff ? !!a.staffPermission && can(a.staffPermission) : !a.adminOnly || isAdmin,
+  )
+  // A clerk whose role reaches none of these gets no button that opens onto nothing.
+  if (visible.length === 0) return null
 
   return (
     <div className="fixed bottom-6 right-6 rtl:right-auto rtl:left-6 z-40 flex flex-col items-end rtl:items-start gap-2">

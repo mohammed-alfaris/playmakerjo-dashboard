@@ -41,7 +41,9 @@ export default function LoginPage() {
     setServerError(null)
     try {
       const res = await login(values)
-      const ALLOWED_ROLES = ["super_admin", "venue_owner"]
+      // venue_staff belongs here too — a counter clerk taking bookings is the whole
+      // reason the role exists, and until now it could not get past this line.
+      const ALLOWED_ROLES = ["super_admin", "venue_owner", "venue_staff"]
       if (!ALLOWED_ROLES.includes(res.data.user.role)) {
         setServerError(t("access_denied"))
         return
