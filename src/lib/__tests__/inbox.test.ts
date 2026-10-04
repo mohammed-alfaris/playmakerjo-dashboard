@@ -26,6 +26,11 @@ describe("targetOf", () => {
     expect(targetOf({ type: "venue_lead", referenceId: "7" })).toEqual({ kind: "route", path: "/leads" })
     expect(targetOf({ type: "general", referenceId: null })).toEqual({ kind: "none" })
   })
+  it("opens the proof for a waiting nudge, the bookings for a cancelled series, the venue for a review", () => {
+    expect(targetOf({ type: "proof_waiting", referenceId: "bk4" })).toEqual({ kind: "proof", bookingId: "bk4" })
+    expect(targetOf({ type: "series_cancelled", referenceId: "rg_1" })).toEqual({ kind: "route", path: "/bookings" })
+    expect(targetOf({ type: "new_review", referenceId: "v1" })).toEqual({ kind: "route", path: "/venues/v1" })
+  })
 })
 
 describe("freshArrivals", () => {
