@@ -11,7 +11,7 @@ export function localized(text: string, lang: "en" | "ar"): string {
 }
 
 /** Types that mean "the schedule changed" — they refresh the timeline and ring. */
-export const SCHEDULE_EVENTS = new Set(["new_booking", "new_series", "proof_received", "booking_cancelled", "series_cancelled"])
+export const SCHEDULE_EVENTS = new Set(["new_booking", "new_series", "proof_received", "booking_cancelled", "series_cancelled", "web_request"])
 
 export type InboxTarget =
   | { kind: "booking"; bookingId: string }
@@ -29,7 +29,7 @@ export function targetOf(item: Pick<InboxItem, "type" | "referenceId">): InboxTa
   if (item.type === "series_cancelled") return { kind: "route", path: "/bookings" }
   // A review is referenced by the venue it is about.
   if (item.type === "new_review") return { kind: "route", path: `/venues/${item.referenceId}` }
-  if (item.type.startsWith("booking_") || item.type === "new_booking" || item.type === "new_series" || item.type === "no_show")
+  if (item.type.startsWith("booking_") || item.type === "new_booking" || item.type === "new_series" || item.type === "no_show" || item.type === "web_request")
     return { kind: "booking", bookingId: item.referenceId }
   return { kind: "none" }
 }

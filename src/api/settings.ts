@@ -14,8 +14,10 @@ export interface PlatformSettings {
 }
 
 export interface BillingDefaults {
-  priceFirstVenue: number
-  priceExtraVenue: number
+  /** Monthly price of a venue with fewer than largeVenueMinPitches pitches. */
+  priceSmallVenue: number
+  priceLargeVenue: number
+  largeVenueMinPitches: number
   setupFee: number
   trialDays: number
   paymentTermsDays: number

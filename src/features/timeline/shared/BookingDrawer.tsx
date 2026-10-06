@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { CalendarClock, Loader2, Printer, Undo2 } from "lucide-react"
+import { CalendarClock, Check, Globe, Loader2, Phone, Printer, Undo2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sheet,
@@ -15,7 +15,7 @@ import type { Booking } from "@/api/bookings"
 import { useT } from "@/i18n/LanguageContext"
 import { useRole } from "@/hooks/useRole"
 import { formatCurrency } from "@/lib/formatters"
-import { bookingPersonName } from "@/lib/bookingParty"
+import { bookingPersonName, bookingPersonPhone } from "@/lib/bookingParty"
 import { markBookingPaid } from "@/api/bookings"
 import { parseHHMM, fmtRange } from "@/lib/timelineDesign"
 import { CancelBookingDialog } from "@/features/bookings/CancelBookingDialog"
@@ -56,6 +56,24 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
     },
   })
 
+  // A guest's request from the venue's web link: the venue says yes (no money moves — they pay
+  // at the venue) or no, which is an ordinary cancel and frees the slot.
+  const isWebRequest = booking.source === "web" && booking.status === "pending"
+  const accept = useMutation({
+    mutationFn: () => api.patch(`/bookings/${booking.id}/confirm`),
+    onSuccess: () => {
+      toast.success(t("web_request_accepted"))
+      qc.invalidateQueries({ queryKey: ["timeline-bookings"] })
+      qc.invalidateQueries({ queryKey: ["venue-slots"] })
+      qc.invalidateQueries({ queryKey: ["bookings"] })
+      onClose()
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) => {
+      toast.error(e.response?.data?.message ?? t("something_went_wrong"))
+    },
+  })
+  const phone = bookingPersonPhone(booking)
+
   // What tapping "completed" will collect. Completing is one act — he played and he paid —
   // so the outstanding balance is settled by that same call, not a separate button.
   const remaining = Math.max(0, (booking.totalAmount ?? booking.amount) - (booking.amountPaid ?? 0))
@@ -94,7 +112,15 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
         </SheetHeader>
         <div className="space-y-4 mt-4">
           <div className="flex items-center justify-between">
-            <StatusBadge status={booking.status} />
+            <div className="flex items-center gap-2">
+              <StatusBadge status={booking.status} />
+              {booking.source === "web" && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--sky)/0.14)] px-2 py-0.5 text-[11px] font-medium text-[hsl(var(--sky-ink))]">
+                  <Globe className="h-3 w-3" />
+                  {t("channel_web")}
+                </span>
+              )}
+            </div>
             <span className="mono text-[11.5px] text-[hsl(var(--ink-3))]">
               {fmtRange(startMin, endMin)}
             </span>
@@ -111,8 +137,28 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
               <InfoCell label={t("pitch_size") ?? "Size"} value={`${booking.pitchSize}-aside`} />
             )}
           </dl>
+          {phone && (
+            <a href={`tel:${phone}`} dir="ltr" className="flex items-center gap-2 text-[12.5px] font-medium text-[hsl(var(--brand-ink))] hover:underline">
+              <Phone className="h-3.5 w-3.5" />
+              {phone}
+            </a>
+          )}
           <div className="hair" />
           <div className="space-y-2">
+            {isWebRequest && can("bookings.manage") && (
+              <div className="rounded-xl border border-[hsl(var(--sky)/0.35)] bg-[hsl(var(--sky)/0.08)] p-3 space-y-2">
+                <p className="text-[12px] text-[hsl(var(--ink-2))]">{t("web_request_hint")}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button size="sm" className="gap-1" onClick={() => accept.mutate()} disabled={accept.isPending}>
+                    {accept.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    {t("web_request_accept")}
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-[hsl(var(--rose-ink))]" onClick={() => setDialog("cancel")}>
+                    {t("web_request_decline")}
+                  </Button>
+                </div>
+              </div>
+            )}
             <Button size="sm" variant="outline" className="w-full" onClick={onView}>
               {t("view_drawer")}
             </Button>

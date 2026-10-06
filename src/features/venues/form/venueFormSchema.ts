@@ -105,6 +105,10 @@ export const schema = z.object({
   latitude:     z.string().optional(),
   longitude:    z.string().optional(),
   cliqAlias:    z.string().optional(),
+  // The public booking link, playmakerjo.com/v/{slug}. Empty = keep the current one (or, for a
+  // new venue, let the server use the venue's id). Same rule as the server's VenueSlug.
+  slug: z.string().trim().toLowerCase().optional()
+    .refine((s) => !s || /^[a-z0-9]+(-[a-z0-9]+)*$/.test(s) && s.length >= 3 && s.length <= 64, { message: "slug_invalid" }),
   depositPercentage: z.number().optional(),
   // Cancelling at least this many hours before the start refunds what was paid. Up to 30
   // days, matching the API's range; 0 means cancelling is always free.
@@ -246,7 +250,7 @@ export const WIZARD_STEPS: WizardStep[] = [
   { key: "basics",  label: "wizard_step_basics",  fields: ["name", "ownerId", "city", "address", "description"] },
   { key: "pitches", label: "wizard_step_pitches", fields: ["pitches"] },
   { key: "hours",   label: "wizard_step_hours",   fields: ["venueHours"] },
-  { key: "payment", label: "wizard_step_payment", fields: ["cliqAlias", "depositPercentage", "freeCancelHours"] },
+  { key: "payment", label: "wizard_step_payment", fields: ["cliqAlias", "depositPercentage", "freeCancelHours", "slug"] },
   // Features live in local state like images, not the schema — FeaturesStep enforces the
   // limits as the owner adds, so there is nothing for the resolver to validate here.
   { key: "features", label: "wizard_step_features", fields: [] },

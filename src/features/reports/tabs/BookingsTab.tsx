@@ -54,7 +54,7 @@ export default function BookingsTab({ params }: { params: ReportParams; print?: 
 
       <ReportCard title={t("report_bookings_by_day")} hint={t("report_bookings_by_day_hint")}>
         {isLoading || !r ? <ChartSkeleton /> : (
-          <DailyBars data={r.daily} format={count} series={(["app", "counter", "weekly", "series"] as const).map((k) => ({
+          <DailyBars data={r.daily} format={count} series={(["app", "web", "counter", "weekly", "series"] as const).map((k) => ({
             key: k, label: channel(k), color: CHANNEL_COLORS[k],
           }))} />
         )}

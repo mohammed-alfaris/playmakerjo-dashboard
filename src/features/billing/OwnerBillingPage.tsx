@@ -36,8 +36,9 @@ export default function OwnerBillingPage() {
               : b.cycle === "annual" ? t("billing_cycle_annual") : t("billing_cycle_monthly")
           } />
           <Stat label={t("billing_price")} value={t("billing_price_value")
-            .replace("{first}", formatCurrency(b.priceFirstVenue))
-            .replace("{extra}", formatCurrency(b.priceExtraVenue))} />
+            .replace("{small}", formatCurrency(b.priceSmallVenue))
+            .replace("{large}", formatCurrency(b.priceLargeVenue))
+            .replace("{n}", String(b.largeVenueMinPitches))} />
           <Stat
             label={t("invoice_state_overdue")}
             value={b.overdueCount > 0 ? formatCurrency(b.overdueAmount) : t("billing_nothing_overdue")}

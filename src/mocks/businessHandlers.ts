@@ -18,7 +18,7 @@ const billing: Record<string, CompanyBilling> = {}
 export function billingOf(ownerId: string): CompanyBilling {
   return (billing[ownerId] ??= {
     status: "trial", cycle: "monthly", trialEndsOn: addDays(today(), 12),
-    priceFirstVenue: 30, priceExtraVenue: 15, customPrices: false, setupFeeWaived: false,
+    priceSmallVenue: 50, priceLargeVenue: 75, largeVenueMinPitches: 3, customPrices: false, setupFeeWaived: false,
     overdueCount: 0, overdueAmount: 0, suspendedAt: null, suspendedReason: null,
   })
 }
@@ -77,7 +77,7 @@ export const businessHandlers = [
       if (b.status === "suspended") { skipped.push({ ownerId: id, companyName: id, reason: "suspended" }); continue }
       if (b.trialEndsOn && b.trialEndsOn >= `${period}-01`) { skipped.push({ ownerId: id, companyName: id, reason: "in_trial" }); continue }
       const lines: InvoiceLine[] = [
-        { id: `il${++seq}`, kind: "subscription", description: `Monthly subscription (${period}): first venue`, descriptionAr: `الاشتراك الشهري (${period}): الملعب الأول`, quantity: 1, unitPrice: b.priceFirstVenue, amount: b.priceFirstVenue },
+        { id: `il${++seq}`, kind: "subscription", description: `Monthly subscription (${period}): 1 venue(s) with up to 2 pitch(es)`, descriptionAr: `الاشتراك الشهري (${period}): 1 منشأة حتى 2 ملعب`, quantity: 1, unitPrice: b.priceSmallVenue, amount: b.priceSmallVenue },
       ]
       if (!b.setupFeeWaived && !invoices.some((i) => i.ownerId === id && i.status !== "void" && i.lines.some((l) => l.kind === "setup_fee")))
         lines.push({ id: `il${++seq}`, kind: "setup_fee", description: "Setup: data entry and training", descriptionAr: "رسوم التأسيس: إدخال البيانات والتدريب", quantity: 1, unitPrice: 100, amount: 100 })
@@ -132,13 +132,13 @@ export const businessHandlers = [
   }),
   http.patch(`${BASE}/companies/:ownerId/billing`, async ({ params, request }) => {
     const b = billingOf(String(params.ownerId))
-    const body = (await request.json()) as { cycle?: "monthly" | "annual"; trialEndsOn?: string; prices?: { firstVenue: number | null; extraVenue: number | null }; setupFeeWaived?: boolean }
+    const body = (await request.json()) as { cycle?: "monthly" | "annual"; trialEndsOn?: string; prices?: { smallVenue: number | null; largeVenue: number | null }; setupFeeWaived?: boolean }
     if (body.cycle) b.cycle = body.cycle
     if (body.trialEndsOn !== undefined) b.trialEndsOn = body.trialEndsOn || null
     if (body.prices) {
-      b.customPrices = body.prices.firstVenue != null || body.prices.extraVenue != null
-      b.priceFirstVenue = body.prices.firstVenue ?? 30
-      b.priceExtraVenue = body.prices.extraVenue ?? 15
+      b.customPrices = body.prices.smallVenue != null || body.prices.largeVenue != null
+      b.priceSmallVenue = body.prices.smallVenue ?? 50
+      b.priceLargeVenue = body.prices.largeVenue ?? 75
     }
     if (body.setupFeeWaived !== undefined) b.setupFeeWaived = body.setupFeeWaived
     if (b.status !== "suspended") b.status = b.trialEndsOn && b.trialEndsOn >= today() ? "trial" : "active"

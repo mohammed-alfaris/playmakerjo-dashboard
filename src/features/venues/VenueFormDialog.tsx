@@ -106,6 +106,7 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
             latitude:     venue.latitude?.toString()  ?? "",
             longitude:    venue.longitude?.toString() ?? "",
             cliqAlias:    venue.cliqAlias ?? "",
+            slug:         venue.slug ?? "",
             depositPercentage: venue.depositPercentage ?? 20,
             freeCancelHours: venue.freeCancelHours ?? 24,
             venueHours:   hoursFromOperating(venue.operatingHours),
@@ -114,7 +115,7 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
         : {
             name: "", ownerId: isOwner && userId ? userId : "", city: "", address: "",
             description: "",
-            latitude: "", longitude: "", cliqAlias: "", depositPercentage: 20, freeCancelHours: 24,
+            latitude: "", longitude: "", cliqAlias: "", slug: "", depositPercentage: 20, freeCancelHours: 24,
             venueHours: hoursFromOperating(undefined),
             pitches: seededPitches,
           }
@@ -221,6 +222,7 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
         latitude:  values.latitude  ? parseFloat(values.latitude)  : undefined,
         longitude: values.longitude ? parseFloat(values.longitude) : undefined,
         cliqAlias: values.cliqAlias || undefined,
+        slug: values.slug || undefined,
         depositPercentage: values.depositPercentage,
         freeCancelHours: values.freeCancelHours,
         operatingHours: venueOperatingHours,
@@ -493,6 +495,16 @@ export function VenueFormDialog({ open, onOpenChange, venue, onSuccess }: VenueF
                 <div className="space-y-1.5">
                   <Label htmlFor="cliqAlias">{t("cliq_alias")}</Label>
                   <Input id="cliqAlias" placeholder={t("cliq_alias_hint")} {...register("cliqAlias")} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="slug">{t("booking_link")}</Label>
+                  <div className="flex items-center gap-1" dir="ltr">
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">playmakerjo.com/v/</span>
+                    <Input id="slug" placeholder="al-ameen-arena" {...register("slug")} />
+                  </div>
+                  <p className={errors.slug ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                    {t(errors.slug ? "slug_invalid" : "booking_link_hint")}
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="depositPercentage">{t("deposit_percentage")}</Label>

@@ -3,6 +3,7 @@ import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
 import { featureIcon } from "@/lib/featureIcons"
 import type { Venue } from "@/api/venues"
+import { BookingLinkCard } from "./BookingLinkCard"
 
 // ---------------------------------------------------------------------------
 // Overview tab — venue info cards (about, contact, location)
@@ -48,6 +49,9 @@ export function OverviewTab({ venue }: { venue: Venue }) {
             </a>
           )}
         </div>
+      </Section>
+      <Section title={t("booking_link")} className="md:col-span-3">
+        <BookingLinkCard venue={venue} />
       </Section>
       <Section title={t("venue_features")} className="md:col-span-3">
         {features.length === 0 && custom.length === 0 ? (
