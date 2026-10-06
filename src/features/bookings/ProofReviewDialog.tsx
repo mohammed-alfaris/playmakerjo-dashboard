@@ -90,14 +90,9 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
   const isPending = booking?.paymentProofStatus === "pending_review" && booking?.status === "pending_review"
 
   const locale = lang === "ar" ? "ar-JO" : "en-GB"
-  const submittedLabel = booking
-    ? new Date(booking.date).toLocaleString(locale, {
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : ""
+  // Who sent it: the customer on a counter or web booking, whose `player` is the venue's own
+  // account standing in; the player on an app booking.
+  const sender = booking ? booking.customer?.name ?? booking.player.name : ""
 
   // The CliQ transfer happens out of band — the platform never observes the
   // amount actually sent. `amountPaid` is only written when this dialog approves
@@ -213,7 +208,7 @@ export function ProofReviewDialog({ bookingId, open, onClose }: Props) {
                 {bookingShortId}
               </h2>
               <p className="mt-0.5 text-[12px] text-ink-3">
-                {t("submitted_on")} {submittedLabel} · {booking.player.name}
+                {t("proof_from")} {sender}
               </p>
 
               <div className="hair my-4" />
