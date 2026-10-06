@@ -153,7 +153,7 @@ export interface BookingsReport {
   cancelledExpired: number
   byStatus: KeyCount[]
   byChannel: KeyCount[]
-  daily: { date: string; app: number; counter: number; weekly: number; series: number; cancelled: number }[]
+  daily: { date: string; app: number; counter: number; weekly: number; series: number; cancelled: number; web?: number }[]
   leadTime: KeyCount[]
   sports: KeyCount[]
 }

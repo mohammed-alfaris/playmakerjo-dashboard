@@ -44,8 +44,10 @@ export interface CompanyBilling {
   status: "trial" | "active" | "suspended"
   cycle: "monthly" | "annual"
   trialEndsOn?: string | null
-  priceFirstVenue: number
-  priceExtraVenue: number
+  /** Each venue is priced on its own: small, or large from largeVenueMinPitches pitches. */
+  priceSmallVenue: number
+  priceLargeVenue: number
+  largeVenueMinPitches: number
   customPrices: boolean
   setupFeeWaived: boolean
   overdueCount: number
@@ -122,7 +124,7 @@ export interface UpdateCompanyBilling {
   /** "yyyy-MM-dd"; "" ends the trial. */
   trialEndsOn?: string
   /** Sets both; null = use the platform default. */
-  prices?: { firstVenue: number | null; extraVenue: number | null }
+  prices?: { smallVenue: number | null; largeVenue: number | null }
   setupFeeWaived?: boolean
 }
 

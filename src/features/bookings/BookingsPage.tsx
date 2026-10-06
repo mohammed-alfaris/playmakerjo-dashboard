@@ -2,7 +2,7 @@ import { useSearchParams } from "react-router-dom"
 import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { type ColumnDef } from "@tanstack/react-table"
-import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone } from "lucide-react"
+import { CalendarCheck, X, Eye, Repeat, Ban, CheckCircle, UserX, Store, Smartphone, Globe } from "lucide-react"
 import { toast } from "sonner"
 import { ProofReviewDialog } from "./ProofReviewDialog"
 import { PageHeader } from "@/components/shared/PageHeader"
@@ -213,7 +213,12 @@ export default function BookingsPage() {
       // Where the booking came from. Until this existed the two were indistinguishable
       // once created — the flag was consumed at creation and thrown away.
       cell: ({ row }) =>
-        row.original.isManual ? (
+        row.original.source === "web" ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--sky)/0.14)] px-2 py-0.5 text-[11px] font-medium text-[hsl(var(--sky-ink))]">
+            <Globe className="h-3 w-3" />
+            {t("channel_web")}
+          </span>
+        ) : row.original.isManual ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-2">
             <Store className="h-3 w-3" />
             {t("channel_counter")}

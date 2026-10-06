@@ -49,8 +49,8 @@ function Body({ company }: { company: Company }) {
   const [cycle, setCycle] = useState(b.cycle)
   const [trialEndsOn, setTrialEndsOn] = useState(b.trialEndsOn ?? "")
   const [custom, setCustom] = useState(b.customPrices)
-  const [first, setFirst] = useState(String(b.priceFirstVenue))
-  const [extra, setExtra] = useState(String(b.priceExtraVenue))
+  const [small, setSmall] = useState(String(b.priceSmallVenue))
+  const [large, setLarge] = useState(String(b.priceLargeVenue))
   const [waived, setWaived] = useState(b.setupFeeWaived)
   const [reason, setReason] = useState(b.suspendedReason ?? "")
   const months = periodOptions(ammanToday())
@@ -68,7 +68,7 @@ function Body({ company }: { company: Company }) {
     mutationFn: () => updateCompanyBilling(company.id, {
       cycle,
       trialEndsOn,
-      prices: custom ? { firstVenue: Number(first), extraVenue: Number(extra) } : { firstVenue: null, extraVenue: null },
+      prices: custom ? { smallVenue: Number(small), largeVenue: Number(large) } : { smallVenue: null, largeVenue: null },
       setupFeeWaived: waived,
     }),
     onSuccess: () => { toast.success(t("company_billing_saved")); refresh() },
@@ -126,12 +126,12 @@ function Body({ company }: { company: Company }) {
           {t("billing_custom_prices")}
         </label>
         <div className="space-y-1.5">
-          <Label htmlFor="cb-first">{t("billing_price_first")}</Label>
-          <Input id="cb-first" type="number" min={0} step="0.5" className="num" disabled={!custom} value={first} onChange={(e) => setFirst(e.target.value)} />
+          <Label htmlFor="cb-small">{t("billing_price_small")}</Label>
+          <Input id="cb-small" type="number" min={0} step="0.5" className="num" disabled={!custom} value={small} onChange={(e) => setSmall(e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="cb-extra">{t("billing_price_extra")}</Label>
-          <Input id="cb-extra" type="number" min={0} step="0.5" className="num" disabled={!custom} value={extra} onChange={(e) => setExtra(e.target.value)} />
+          <Label htmlFor="cb-large">{t("billing_price_large").replace("{n}", String(b.largeVenueMinPitches))}</Label>
+          <Input id="cb-large" type="number" min={0} step="0.5" className="num" disabled={!custom} value={large} onChange={(e) => setLarge(e.target.value)} />
         </div>
         <label className="col-span-2 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={waived} onChange={(e) => setWaived(e.target.checked)} />

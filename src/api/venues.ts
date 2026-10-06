@@ -47,6 +47,8 @@ export interface Venue {
   latitude?: number
   longitude?: number
   cliqAlias?: string
+  /** The public booking link's last part: playmakerjo.com/v/{slug}. */
+  slug?: string | null
   operatingHours?: OperatingHours
   minBookingDuration?: number
   maxBookingDuration?: number

@@ -10,8 +10,9 @@ import { useT } from "@/i18n/LanguageContext"
 import type { TranslationKey } from "@/i18n/translations"
 
 const FIELDS: { key: keyof BillingDefaults; label: TranslationKey; step: string }[] = [
-  { key: "priceFirstVenue", label: "billing_price_first", step: "0.5" },
-  { key: "priceExtraVenue", label: "billing_price_extra", step: "0.5" },
+  { key: "priceSmallVenue", label: "billing_price_small", step: "0.5" },
+  { key: "priceLargeVenue", label: "billing_price_large", step: "0.5" },
+  { key: "largeVenueMinPitches", label: "billing_large_from", step: "1" },
   { key: "setupFee", label: "billing_setup_fee", step: "1" },
   { key: "trialDays", label: "billing_trial_days", step: "1" },
   { key: "paymentTermsDays", label: "billing_terms_days", step: "1" },

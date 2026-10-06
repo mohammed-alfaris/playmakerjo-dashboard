@@ -38,6 +38,8 @@ export interface Booking {
   notes?: string | null
   /** Taken at the counter or by phone, rather than through the player app. */
   isManual?: boolean
+  /** "web": booked by a guest on the venue's public link (also isManual: no player account). */
+  source?: "web" | null
   systemFee?: number
   ownerAmount?: number
   systemFeePercentage?: number
