@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { AnimatePresence, motion } from "framer-motion"
-import { Plus, Building2, UserPlus, Megaphone, FileDown, X } from "lucide-react"
+import { Plus, Building2, UserPlus, Megaphone, FileDown, X, CalendarPlus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRole } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
@@ -13,6 +13,8 @@ interface Action {
   icon: React.ElementType
   onClick: () => void
   adminOnly?: boolean
+  /** For the people who run a venue: never offered to the platform admin. */
+  venueOnly?: boolean
   /** Shown to venue_staff only when their role grants this; without it, never. */
   staffPermission?: Permission
 }
@@ -24,13 +26,16 @@ export function QuickActionFab() {
   const { t } = useT()
 
   const actions: Action[] = [
+    { labelKey: "new_booking",            icon: CalendarPlus, onClick: () => navigate("/bookings/new"), venueOnly: true, staffPermission: "bookings.manage" },
     { labelKey: "add_venue",              icon: Building2, onClick: () => navigate("/venues?new=1") },
     { labelKey: "add_user",               icon: UserPlus,  onClick: () => navigate("/users?new=1"),       adminOnly: true },
     { labelKey: "broadcast_announcement", icon: Megaphone, onClick: () => navigate("/notifications?new=1"), adminOnly: true },
     { labelKey: "export_report",          icon: FileDown,  onClick: () => navigate("/reports?export=1"), staffPermission: "reports.view" },
   ]
   const visible = actions.filter((a) =>
-    isStaff ? !!a.staffPermission && can(a.staffPermission) : !a.adminOnly || isAdmin,
+    isStaff ? !!a.staffPermission && can(a.staffPermission)
+      : isAdmin ? !a.venueOnly
+      : !a.adminOnly,
   )
   // A clerk whose role reaches none of these gets no button that opens onto nothing.
   if (visible.length === 0) return null

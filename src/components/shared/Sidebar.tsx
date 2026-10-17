@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom"
 import {
   LayoutDashboard,
+  Sun,
   MapPin,
   Map as MapIcon,
   Users,
@@ -46,7 +47,8 @@ const NAV_GROUPS: { labelKey: TranslationKey | null; items: NavItem[] }[] = [
       // venue_staff get the day-to-day surfaces their role allows. Never venues (they
       // don't set prices) and never the dashboard — every card on it is revenue or
       // portfolio, so for staff it rendered completely empty. They land on the schedule.
-      { href: "/",         labelKey: "nav_dashboard", icon: LayoutDashboard, roles: ["super_admin", "venue_owner"] },
+      { href: "/",         labelKey: "nav_dashboard", icon: LayoutDashboard, roles: ["super_admin"] },
+      { href: "/",         labelKey: "nav_today",     icon: Sun,             roles: ["venue_owner", "venue_staff"], permission: "bookings.view" },
       { href: "/venues",   labelKey: "nav_venues",    icon: MapPin,          roles: ["super_admin", "venue_owner"] },
       { href: "/map",      labelKey: "nav_map",       icon: MapIcon,         roles: ["super_admin"] },
       { href: "/timeline", labelKey: "slot_timeline", icon: CalendarClock,   roles: ["super_admin", "venue_owner", "venue_staff"], permission: "bookings.view" },
