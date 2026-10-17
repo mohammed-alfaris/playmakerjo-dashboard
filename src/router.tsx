@@ -8,6 +8,8 @@ import type { Permission } from "@/lib/permissions"
 // Lazy-loaded pages
 const LoginPage = lazy(() => import("@/features/auth/LoginPage"))
 const DashboardPage = lazy(() => import("@/features/dashboard/DashboardPage"))
+const TodayPage = lazy(() => import("@/features/today/TodayPage"))
+const NewBookingPage = lazy(() => import("@/features/bookings/NewBookingPage"))
 const VenuesPage = lazy(() => import("@/features/venues/VenuesPage"))
 const VenueDetailPage = lazy(() => import("@/features/venues/VenueDetailPage"))
 const UsersPage = lazy(() => import("@/features/users/UsersPage"))
@@ -94,22 +96,23 @@ function PermissionRoute({ permission, children }: { permission: Permission; chi
 }
 
 /**
- * The dashboard is entirely revenue and portfolio cards, all gated to admin/owner, so a
- * staff member landing on it saw a blank page. Send them to the schedule — the screen
- * they actually work in all day — or, for a role without it, the first page they have.
+ * Home is "Today" for the people who run a venue — what is waiting for them, how the day is
+ * going, what is next — and the portfolio dashboard for the platform admin. A staff member
+ * whose role cannot see bookings has no Today to look at, so they go to the first page
+ * their role does reach.
  */
 function HomeRoute() {
-  const { isStaff, can } = useRole()
-  if (isStaff) {
+  const { isAdmin, isStaff, can } = useRole()
+  if (isAdmin) return <LazyPage><DashboardPage /></LazyPage>
+  if (isStaff && !can("bookings.view")) {
     const home =
-      can("bookings.view") ? "/timeline"
-      : can("customers.view") ? "/customers"
+      can("customers.view") ? "/customers"
       : can("payments.view") ? "/payments"
       : can("reports.view") ? "/reports"
       : "/profile"
     return <Navigate to={home} replace />
   }
-  return <LazyPage><DashboardPage /></LazyPage>
+  return <LazyPage><TodayPage /></LazyPage>
 }
 
 export const router = createBrowserRouter([
@@ -175,6 +178,7 @@ export const router = createBrowserRouter([
       { path: "customers/report", element: <PermissionRoute permission="customers.view"><LazyPage><CustomerReportPage /></LazyPage></PermissionRoute> },
       { path: "customers/:id", element: <PermissionRoute permission="customers.view"><LazyPage><CustomerDetailPage /></LazyPage></PermissionRoute> },
       { path: "bookings",   element: <PermissionRoute permission="bookings.view"><LazyPage><BookingsPage /></LazyPage></PermissionRoute> },
+      { path: "bookings/new", element: <PermissionRoute permission="bookings.manage"><LazyPage><NewBookingPage /></LazyPage></PermissionRoute> },
       { path: "payments",   element: <PermissionRoute permission="payments.view"><LazyPage><PaymentsPage /></LazyPage></PermissionRoute> },
       { path: "reports",        element: <PermissionRoute permission="reports.view"><LazyPage><ReportsPage /></LazyPage></PermissionRoute> },
       { path: "notifications", element: <AdminRoute><LazyPage><NotificationsPage /></LazyPage></AdminRoute> },

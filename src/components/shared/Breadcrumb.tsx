@@ -8,6 +8,7 @@ const ROUTE_LABELS: Record<string, TranslationKey> = {
   "/":              "nav_dashboard",
   "/venues":        "nav_venues",
   "/bookings":      "nav_bookings",
+  "/bookings/new":  "new_booking",
   "/users":         "nav_users",
   "/companies":     "nav_companies",
   "/billing":       "nav_billing",
