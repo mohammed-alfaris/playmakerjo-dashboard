@@ -24,6 +24,7 @@ import {
 import { formatCurrency } from "@/lib/formatters"
 import { bookingPersonName } from "@/lib/bookingParty"
 import { useT } from "@/i18n/LanguageContext"
+import { sizeLabel, sportName } from "@/lib/dayLabels"
 import type { Pitch, Venue } from "@/api/venues"
 import type { Booking } from "@/api/bookings"
 import type { PermanentBooking } from "@/api/permanentBookings"
@@ -407,8 +408,8 @@ export function LanesTimeline({
                       <div className="text-[13.5px] font-bold text-[hsl(var(--ink))] truncate">
                         {pitch.name}
                       </div>
-                      <div className="text-[11px] text-[hsl(var(--ink-3))] capitalize mt-[3px] truncate">
-                        {pitch.parentSize ? `${pitch.parentSize}-a-side` : pitch.sport}
+                      <div className="text-[11px] text-[hsl(var(--ink-3))] mt-[3px] truncate">
+                        {pitch.parentSize ? sizeLabel(t, pitch.parentSize) : sportName(pitch.sport, lang)}
                         {pitch.subSizes && pitch.subSizes.length > 0
                           ? ` · ${pitch.subSizes.join("+")} ${lang === "ar" ? "تقسيمات" : "splits"}`
                           : ""}

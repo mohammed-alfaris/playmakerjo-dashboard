@@ -9,7 +9,7 @@ import { getDayAvailability, type PitchAvailability } from "@/api/availability"
 import CustomerPhoneField, { type CustomerDraft } from "@/features/customers/CustomerPhoneField"
 import { addDays, toISODate } from "@/features/timeline/shared/dateUtils"
 import { daySlots } from "@/lib/daySlots"
-import { clockLabel, sportName } from "@/lib/dayLabels"
+import { clockLabel, durationLabel, sizeLabel, sportName } from "@/lib/dayLabels"
 import { useOwnerFilter } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
@@ -420,15 +420,4 @@ export default function NewBookingPage() {
       </div>
     </div>
   )
-}
-
-function durationLabel(min: number, t: (k: "qb_hours" | "qb_minutes") => string) {
-  return min % 30 === 0 && min >= 60
-    ? t("qb_hours").replace("{n}", String(min / 60))
-    : t("qb_minutes").replace("{n}", String(min))
-}
-
-/** "{n}-a-side" / "{n} ضد {n}": the Arabic names the number twice. */
-function sizeLabel(t: (k: "qb_size_label") => string, n: string) {
-  return t("qb_size_label").split("{n}").join(n)
 }

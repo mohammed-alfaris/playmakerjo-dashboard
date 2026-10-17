@@ -5,6 +5,7 @@ import { ArrowLeft, Loader2, Printer } from "lucide-react"
 import { getReceipt, type ReceiptLine } from "@/api/bookings"
 import { Button } from "@/components/ui/button"
 import { useT } from "@/i18n/LanguageContext"
+import { sizeLabel, sportName } from "@/lib/dayLabels"
 import type { TranslationKey } from "@/i18n/translations"
 import { formatCurrency } from "@/lib/formatters"
 
@@ -104,8 +105,8 @@ export default function ReceiptPage() {
           {r.startTime && <span className="num ms-2" dir="ltr">{r.startTime.slice(0, 5)}{end && `–${end}`}</span>}
         </dd>
         <dt className="text-muted-foreground">{t("pitch")}</dt>
-        <dd className="capitalize">
-          {[r.pitchName, r.sport, r.pitchSize && `${r.pitchSize}-aside`].filter(Boolean).join(" · ")}
+        <dd>
+          {[r.pitchName, r.sport && sportName(r.sport, lang), r.pitchSize && sizeLabel(t, r.pitchSize)].filter(Boolean).join(" · ")}
         </dd>
       </dl>
 

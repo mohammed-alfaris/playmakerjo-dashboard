@@ -153,6 +153,11 @@ export function CustomerPhoneField({ value, onChange, onResolved, autoFocus, dis
           </span>
         )}
 
+        {/* The row is reserved anyway; until a number is typed, say what it is for. */}
+        {!normalized && value.phone.replace(/\D/g, "").length < 7 && (
+          <span className="text-[hsl(var(--ink-3))]">{t("customer_phone_hint")}</span>
+        )}
+
         {lookup.isError && (
           <span className="text-[hsl(var(--ink-3))]">{t("customer_lookup_failed")}</span>
         )}
