@@ -26,3 +26,15 @@ export function sportName(sport: string, lang: string): string {
   const s = SPORTS[sport.toLowerCase()]
   return s ? s[lang === "ar" ? 1 : 0] : sport
 }
+
+/** 90 → "1.5 h" / "1.5 ساعة"; 30 → "30 min" / "30 دقيقة". */
+export function durationLabel(min: number, t: (k: "qb_hours" | "qb_minutes") => string) {
+  return min % 30 === 0 && min >= 60
+    ? t("qb_hours").replace("{n}", String(min / 60))
+    : t("qb_minutes").replace("{n}", String(min))
+}
+
+/** "{n}-a-side" / "{n} ضد {n}": the Arabic names the number twice. */
+export function sizeLabel(t: (k: "qb_size_label") => string, n: string) {
+  return t("qb_size_label").split("{n}").join(n)
+}

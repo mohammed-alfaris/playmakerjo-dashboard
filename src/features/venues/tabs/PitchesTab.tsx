@@ -2,6 +2,7 @@ import { Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Chip } from "@/components/shared/design/Chip"
 import { useT } from "@/i18n/LanguageContext"
+import { sizeLabel, sportName } from "@/lib/dayLabels"
 import { formatCurrency } from "@/lib/formatters"
 import type { Pitch } from "@/api/venues"
 
@@ -10,7 +11,7 @@ import type { Pitch } from "@/api/venues"
 // ---------------------------------------------------------------------------
 
 export function PitchesTab({ pitches, onEdit }: { pitches: Pitch[]; onEdit: () => void }) {
-  const { t } = useT()
+  const { t, lang } = useT()
   if (pitches.length === 0) {
     return (
       <div className="rounded-[14px] bg-card border border-[hsl(var(--line))] p-8 text-center text-sm text-[hsl(var(--ink-3))]">
@@ -38,15 +39,15 @@ export function PitchesTab({ pitches, onEdit }: { pitches: Pitch[]; onEdit: () =
               {p.subSizes && p.subSizes.length > 0 && (
                 <div className="mt-0.5 text-[11px] text-[hsl(var(--ink-3))]">
                   {t("profile_pitch_split")}:{" "}
-                  {[p.parentSize, ...p.subSizes].filter(Boolean).join(" / ")}-aside
+                  {[p.parentSize, ...p.subSizes].filter((x): x is string => !!x).map((x) => sizeLabel(t, x)).join(" / ")}
                 </div>
               )}
             </div>
             <Chip color="brand" size="sm">
-              <span className="capitalize">{p.sport}</span>
+              {sportName(p.sport, lang)}
             </Chip>
             <span className="mono text-[12px] text-[hsl(var(--ink-2))]">
-              {p.parentSize ? `${p.parentSize}-aside` : "—"}
+              {p.parentSize ? sizeLabel(t, p.parentSize) : "—"}
             </span>
             <span className="mono text-[12px] font-semibold text-[hsl(var(--ink))]">
               {formatCurrency(p.pricePerHour)}

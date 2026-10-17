@@ -12,17 +12,12 @@ import { updateBooking, type Booking, type UpdateBookingPayload } from "@/api/bo
 import { getVenue, type Venue } from "@/api/venues"
 import { useRole } from "@/hooks/useRole"
 import { useT } from "@/i18n/LanguageContext"
+import { durationLabel, sizeLabel } from "@/lib/dayLabels"
 import { formatCurrency } from "@/lib/formatters"
 import { refreshBookingViews } from "./refreshBookingViews"
 
 const selectClass =
   "h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
-
-function durationLabel(d: number) {
-  const h = Math.floor(d / 60)
-  const m = d % 60
-  return h === 0 ? `${m} min` : m === 0 ? `${h} h` : `${h} h ${m}`
-}
 
 /**
  * Move a booking to another day, time, length, pitch or size, or change its price. The
@@ -116,7 +111,7 @@ function MoveBody({ booking, onClose, onSaved }: { booking: Booking; onClose: ()
           <div className="space-y-1.5">
             <Label htmlFor="move-duration">{t("duration")}</Label>
             <select id="move-duration" className={selectClass} value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
-              {durations.map((d) => <option key={d} value={d}>{durationLabel(d)}</option>)}
+              {durations.map((d) => <option key={d} value={d}>{durationLabel(d, t)}</option>)}
             </select>
           </div>
           {sportPitches.length > 1 && (
@@ -141,7 +136,7 @@ function MoveBody({ booking, onClose, onSaved }: { booking: Booking; onClose: ()
                 value={pitchSize || sizes[0]}
                 onChange={(e) => setPitchSize(e.target.value)}
               >
-                {sizes.map((s) => <option key={s} value={s}>{s}-aside</option>)}
+                {sizes.map((s) => <option key={s} value={s}>{sizeLabel(t, s)}</option>)}
               </select>
             </div>
           )}

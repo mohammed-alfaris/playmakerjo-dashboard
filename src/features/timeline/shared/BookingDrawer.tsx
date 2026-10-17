@@ -13,6 +13,7 @@ import api from "@/api/axios"
 import { StatusBadge } from "@/components/shared/StatusBadge"
 import type { Booking } from "@/api/bookings"
 import { useT } from "@/i18n/LanguageContext"
+import { durationLabel, sizeLabel, sportName } from "@/lib/dayLabels"
 import { useRole } from "@/hooks/useRole"
 import { formatCurrency } from "@/lib/formatters"
 import { bookingPersonName, bookingPersonPhone } from "@/lib/bookingParty"
@@ -36,7 +37,7 @@ export interface BookingDrawerProps {
 }
 
 export function BookingDrawer({ booking, onClose, onView, onCompleted }: BookingDrawerProps) {
-  const { t } = useT()
+  const { t, lang } = useT()
   const { can } = useRole()
   const qc = useQueryClient()
   const startMin = parseHHMM(booking.startTime)
@@ -127,14 +128,14 @@ export function BookingDrawer({ booking, onClose, onView, onCompleted }: Booking
           </div>
           <div className="hair" />
           <dl className="grid grid-cols-2 gap-3 text-[12.5px]">
-            <InfoCell label={t("sport")} value={<span className="capitalize">{booking.sport}</span>} />
-            <InfoCell label={t("duration")} value={`${booking.duration} min`} />
+            <InfoCell label={t("sport")} value={sportName(booking.sport, lang)} />
+            <InfoCell label={t("duration")} value={durationLabel(booking.duration, t)} />
             <InfoCell label={t("amount")} value={formatCurrency(booking.totalAmount ?? booking.amount)} />
             {booking.paymentMethod && (
               <InfoCell label={t("payment_method")} value={<span className="uppercase">{booking.paymentMethod}</span>} />
             )}
             {booking.pitchSize && (
-              <InfoCell label={t("pitch_size") ?? "Size"} value={`${booking.pitchSize}-aside`} />
+              <InfoCell label={t("pitch_size") ?? "Size"} value={sizeLabel(t, booking.pitchSize)} />
             )}
           </dl>
           {phone && (

@@ -15,7 +15,8 @@ import CustomerPhoneField, { type CustomerDraft } from "@/features/customers/Cus
 import type { Pitch } from "@/api/venues"
 import { useT } from "@/i18n/LanguageContext"
 import { formatCurrency } from "@/lib/formatters"
-import { parseHHMM, fmt12, hoursFor, slotFitsCapacity } from "@/lib/timelineDesign"
+import { parseHHMM, hoursFor, slotFitsCapacity } from "@/lib/timelineDesign"
+import { clockLabel, durationLabel, sizeLabel, sportName } from "@/lib/dayLabels"
 import type { PermanentBooking } from "@/api/permanentBookings"
 import type { Booking } from "@/api/bookings"
 import type { OperatingHours } from "@/lib/types"
@@ -68,7 +69,7 @@ export function AssignBookingDialog({
   dayPermanents,
   onClose,
 }: AssignBookingDialogProps) {
-  const { t } = useT()
+  const { t, lang } = useT()
   const qc = useQueryClient()
   const [sport, setSport] = useState<string>(preset?.sport ?? sports?.[0] ?? "football")
   // Replaces the old free-text `playerName`. That field wrote the customer's name into the
@@ -265,20 +266,20 @@ export function AssignBookingDialog({
                     value={String(startMin)}
                     onChange={(e) => setStartMin(Number(e.target.value))}
                     disabled={startOptions.length === 0}
-                    className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none disabled:opacity-50"
+                    className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none disabled:opacity-50"
                   >
                     {startOptions.length === 0 ? (
                       <option value="">—</option>
                     ) : (
                       startOptions.map((m) => (
                         <option key={m} value={m}>
-                          {fmt12(m)}
+                          {clockLabel(`${Math.floor(m / 60)}:${m % 60}`, lang)}
                         </option>
                       ))
                     )}
                   </select>
                 ) : (
-                  <div className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm flex items-center text-[hsl(var(--ink-3))]">
+                  <div className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm flex items-center text-[hsl(var(--ink-3))]">
                     {t("venue_closed_day")}
                   </div>
                 )
@@ -290,7 +291,7 @@ export function AssignBookingDialog({
                     const [h, m] = e.target.value.split(":").map(Number)
                     setStartMin(h * 60 + m)
                   }}
-                  className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+                  className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
                 />
               )}
             </Field>
@@ -298,19 +299,11 @@ export function AssignBookingDialog({
               <select
                 value={duration}
                 onChange={(e) => setDurationChoice(Number(e.target.value))}
-                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+                className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
               >
                 {durationOptions.map((d) => (
                   <option key={d} value={d}>
-                    {d === 30
-                      ? "30 min"
-                      : d === 60
-                        ? "1 h"
-                        : d === 90
-                          ? "1 h 30"
-                          : d === 120
-                            ? "2 h"
-                            : `${d} min`}
+                    {durationLabel(d, t)}
                   </option>
                 ))}
               </select>
@@ -321,14 +314,14 @@ export function AssignBookingDialog({
             <select
               value={sport}
               onChange={(e) => setSport(e.target.value)}
-              className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm capitalize text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+              className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
             >
               {(sports && sports.length > 0
                 ? sports
                 : ["football", "basketball", "tennis", "padel", "volleyball"]
               ).map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {sportName(s, lang)}
                 </option>
               ))}
             </select>
@@ -344,7 +337,7 @@ export function AssignBookingDialog({
                 {sportPitches.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
-                    {p.parentSize ? ` · ${p.parentSize}-aside` : ""}
+                    {p.parentSize ? ` · ${sizeLabel(t, p.parentSize)}` : ""}
                   </option>
                 ))}
               </select>
@@ -356,14 +349,14 @@ export function AssignBookingDialog({
               <select
                 value={pitchSize ?? ""}
                 onChange={(e) => setPitchSizeChoice(e.target.value)}
-                className="mono h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
+                className="h-9 w-full rounded-md border border-[hsl(var(--line))] bg-card px-2 text-sm text-[hsl(var(--ink))] focus:border-[hsl(var(--brand))] focus:outline-none"
               >
                 {offeredSizes.map((s) => {
                   const price = effectivePrices[s]
                   return (
                     <option key={s} value={s}>
-                      {s}-aside
-                      {price != null ? ` · ${formatCurrency(price)}/h` : ""}
+                      {sizeLabel(t, s)}
+                      {price != null ? ` · ${t("qb_per_hour").replace("{price}", formatCurrency(price))}` : ""}
                     </option>
                   )
                 })}

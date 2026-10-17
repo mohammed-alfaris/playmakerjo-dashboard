@@ -27,6 +27,7 @@ import {
   type PermanentBooking,
 } from "@/api/permanentBookings"
 import { useT } from "@/i18n/LanguageContext"
+import { sizeLabel } from "@/lib/dayLabels"
 import type { TranslationKey } from "@/i18n/translations"
 import { cn } from "@/lib/utils"
 
@@ -172,7 +173,7 @@ export function PermanentBookingFormDialog({ venue, open, onOpenChange, onCreate
                         : "bg-card border-[hsl(var(--line))] text-[hsl(var(--ink-2))] hover:bg-[hsl(var(--surface-2))]",
                     )}
                   >
-                    {sz}-aside
+                    {sizeLabel(t, sz)}
                   </button>
                 ))}
               </div>

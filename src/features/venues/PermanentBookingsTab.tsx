@@ -12,6 +12,7 @@ import {
 } from "@/api/permanentBookings"
 import { type Venue } from "@/api/venues"
 import { useT } from "@/i18n/LanguageContext"
+import { sizeLabel } from "@/lib/dayLabels"
 import type { TranslationKey } from "@/i18n/translations"
 import { PermanentBookingFormDialog } from "./PermanentBookingFormDialog"
 
@@ -120,7 +121,7 @@ export function PermanentBookingsTab({ venue }: { venue: Venue }) {
                   <td className="px-3 py-3">{row.duration} min</td>
                   <td className="px-3 py-3">{pitchName(row.pitchId)}</td>
                   <td className="px-3 py-3">
-                    {row.pitchSize ? `${row.pitchSize}-aside` : "—"}
+                    {row.pitchSize ? sizeLabel(t, row.pitchSize) : "—"}
                   </td>
                   <td className="px-3 py-3 text-[hsl(var(--ink-2))]">
                     {row.label || "—"}
